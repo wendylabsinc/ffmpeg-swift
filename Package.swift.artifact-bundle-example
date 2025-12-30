@@ -1,0 +1,72 @@
+// swift-tools-version: 6.2
+// Example Package.swift showing how to use Swift 6.2 artifact bundles for pre-built FFmpeg binaries
+// This enables true cross-platform binary distribution without requiring system-installed FFmpeg
+
+import PackageDescription
+
+let package = Package(
+    name: "FFmpeg",
+    platforms: [
+        .macOS(.v26),
+        .iOS(.v26),
+        .tvOS(.v26),
+        .visionOS(.v26),
+    ],
+    products: [
+        .library(
+            name: "FFmpeg",
+            targets: ["FFmpeg"]
+        ),
+    ],
+    targets: [
+        // Swift wrapper target
+        .target(
+            name: "FFmpeg",
+            dependencies: [
+                "libavcodec",
+                "libavformat",
+                "libavutil",
+                "libswscale",
+                "libswresample",
+            ]
+        ),
+
+        // Pre-built FFmpeg libraries using Swift 6.2 artifact bundles
+        // These support Apple platforms (via XCFramework) and Linux/Windows (via static library artifacts)
+
+        // For Apple platforms, use XCFramework:
+        // .binaryTarget(
+        //     name: "FFmpegKit",
+        //     url: "https://github.com/wendylabsinc/ffmpeg-swift/releases/download/v1.0.0/FFmpegKit.xcframework.zip",
+        //     checksum: "..."
+        // ),
+
+        // For cross-platform (Linux, Windows), use artifact bundles with static libraries:
+        // Swift 6.2 SE-0482 format
+        .binaryTarget(
+            name: "libavcodec",
+            path: "Artifacts/libavcodec.artifactbundle"
+        ),
+        .binaryTarget(
+            name: "libavformat",
+            path: "Artifacts/libavformat.artifactbundle"
+        ),
+        .binaryTarget(
+            name: "libavutil",
+            path: "Artifacts/libavutil.artifactbundle"
+        ),
+        .binaryTarget(
+            name: "libswscale",
+            path: "Artifacts/libswscale.artifactbundle"
+        ),
+        .binaryTarget(
+            name: "libswresample",
+            path: "Artifacts/libswresample.artifactbundle"
+        ),
+
+        .testTarget(
+            name: "FFmpegTests",
+            dependencies: ["FFmpeg"]
+        ),
+    ]
+)
