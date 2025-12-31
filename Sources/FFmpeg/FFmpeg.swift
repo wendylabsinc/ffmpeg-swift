@@ -14,7 +14,7 @@
 // MARK: - Version
 
 /// Semantic version representation
-public struct Version: Sendable, Comparable, CustomStringConvertible {
+public struct SemanticVersion: Sendable, Comparable, CustomStringConvertible {
     public let major: Int
     public let minor: Int
     public let patch: Int
@@ -36,36 +36,39 @@ public struct Version: Sendable, Comparable, CustomStringConvertible {
         "\(major).\(minor).\(patch)"
     }
 
-    public static func < (lhs: Version, rhs: Version) -> Bool {
+    public static func < (lhs: SemanticVersion, rhs: SemanticVersion) -> Bool {
         if lhs.major != rhs.major { return lhs.major < rhs.major }
         if lhs.minor != rhs.minor { return lhs.minor < rhs.minor }
         return lhs.patch < rhs.patch
     }
 }
 
+/// Typealias for convenience
+public typealias Version = SemanticVersion
+
 // MARK: - FFmpeg
 
 /// FFmpeg library information and utilities
 public enum FFmpeg {
     /// Library versions
-    public enum Version {
-        public static var avcodec: FFmpeg_Swift.Version {
+    public enum Versions {
+        public static var avcodec: SemanticVersion {
             .init(packed: avcodec_version())
         }
 
-        public static var avformat: FFmpeg_Swift.Version {
+        public static var avformat: SemanticVersion {
             .init(packed: avformat_version())
         }
 
-        public static var avutil: FFmpeg_Swift.Version {
+        public static var avutil: SemanticVersion {
             .init(packed: avutil_version())
         }
 
-        public static var swscale: FFmpeg_Swift.Version {
+        public static var swscale: SemanticVersion {
             .init(packed: swscale_version())
         }
 
-        public static var swresample: FFmpeg_Swift.Version {
+        public static var swresample: SemanticVersion {
             .init(packed: swresample_version())
         }
     }
@@ -110,6 +113,20 @@ public struct FFmpegError: Error, CustomStringConvertible, Sendable {
 
 // MARK: - Common Error Codes
 
+/// Compute AVERROR tag from 4 characters (matches FFmpeg's FFERRTAG macro)
+@inlinable
+public func AVERROR_TAG(_ a: UInt8, _ b: UInt8, _ c: UInt8, _ d: UInt8) -> Int32 {
+    -Int32(bitPattern: UInt32(a) | (UInt32(b) << 8) | (UInt32(c) << 16) | (UInt32(d) << 24))
+}
+
+/// Common FFmpeg error codes
+public let AVERROR_EOF = AVERROR_TAG(0x45, 0x4F, 0x46, 0x20)  // 'E','O','F',' '
+public let AVERROR_INVALIDDATA = AVERROR_TAG(0x49, 0x4E, 0x44, 0x41)  // 'I','N','D','A'
+public let AVERROR_DECODER_NOT_FOUND = AVERROR_TAG(0xF8, 0x44, 0x45, 0x43)  // 0xF8,'D','E','C'
+public let AVERROR_ENCODER_NOT_FOUND = AVERROR_TAG(0xF8, 0x45, 0x4E, 0x43)  // 0xF8,'E','N','C'
+public let AVERROR_DEMUXER_NOT_FOUND = AVERROR_TAG(0xF8, 0x44, 0x45, 0x4D)  // 0xF8,'D','E','M'
+public let AVERROR_MUXER_NOT_FOUND = AVERROR_TAG(0xF8, 0x4D, 0x55, 0x58)  // 0xF8,'M','U','X'
+
 extension FFmpegError {
     public static var endOfFile: Int32 { AVERROR_EOF }
     public static var invalidData: Int32 { AVERROR_INVALIDDATA }
@@ -118,7 +135,7 @@ extension FFmpegError {
 // MARK: - Codec
 
 /// Swift wrapper for AVCodec
-public struct Codec: Sendable {
+public struct Codec: @unchecked Sendable {
     public let pointer: UnsafePointer<AVCodec>
 
     public init?(_ pointer: UnsafePointer<AVCodec>?) {
@@ -199,16 +216,16 @@ extension AVSampleFormat: @retroactive CustomStringConvertible {
 
 // MARK: - Deprecated Compatibility
 
-/// Deprecated: Use `FFmpeg.Version` instead
-@available(*, deprecated, renamed: "FFmpeg.Version")
+/// Deprecated: Use `FFmpeg.Versions` instead
+@available(*, deprecated, renamed: "FFmpeg.Versions")
 public typealias FFmpegVersion = _FFmpegVersionCompat
 
 public enum _FFmpegVersionCompat {
-    public static var avcodec: String { FFmpeg.Version.avcodec.description }
-    public static var avformat: String { FFmpeg.Version.avformat.description }
-    public static var avutil: String { FFmpeg.Version.avutil.description }
-    public static var swscale: String { FFmpeg.Version.swscale.description }
-    public static var swresample: String { FFmpeg.Version.swresample.description }
+    public static var avcodec: String { FFmpeg.Versions.avcodec.description }
+    public static var avformat: String { FFmpeg.Versions.avformat.description }
+    public static var avutil: String { FFmpeg.Versions.avutil.description }
+    public static var swscale: String { FFmpeg.Versions.swscale.description }
+    public static var swresample: String { FFmpeg.Versions.swresample.description }
     public static var configuration: String { FFmpeg.configuration }
     public static var license: String { FFmpeg.license }
 }
