@@ -1,40 +1,58 @@
 # FFmpeg Swift
 
-Swift 6.2+ bindings for FFmpeg, supporting cross-platform development with SE-0482 artifact bundles.
+[![Build FFmpeg](https://github.com/wendylabsinc/ffmpeg-swift/actions/workflows/build-ffmpeg.yml/badge.svg)](https://github.com/wendylabsinc/ffmpeg-swift/actions/workflows/build-ffmpeg.yml)
+[![Swift 6.2](https://img.shields.io/badge/Swift-6.2+-orange.svg)](https://swift.org)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%20|%20iOS%20|%20tvOS%20|%20visionOS%20|%20Linux-blue.svg)](https://swift.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Requirements
+Swift 6.2+ bindings for FFmpeg with cross-platform artifact bundle support ([SE-0482](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0482-swiftpm-static-library-binary-target-non-apple-platforms.md)).
 
-- Swift 6.2+
-- macOS 26+ / iOS 26+ / tvOS 26+ / visionOS 26+ / Linux
+> **⚠️ Requires Swift 6.2+**
+> This package uses Swift 6.2's cross-platform artifact bundles feature for distributing pre-built FFmpeg binaries across macOS and Linux. It will not work with earlier Swift versions.
 
 ## Installation
 
-### Swift Package Manager
-
-Add to your `Package.swift`:
+Add the package to your `Package.swift`:
 
 ```swift
-dependencies: [
-    .package(url: "https://github.com/wendylabsinc/ffmpeg-swift.git", from: "1.0.0")
-],
-targets: [
-    .target(name: "YourApp", dependencies: [
-        .product(name: "FFmpeg", package: "ffmpeg-swift")
-    ])
-]
+// swift-tools-version: 6.2
+
+import PackageDescription
+
+let package = Package(
+    name: "MyApp",
+    platforms: [.macOS(.v26)],
+    dependencies: [
+        .package(url: "https://github.com/wendylabsinc/ffmpeg-swift.git", from: "1.0.0")
+    ],
+    targets: [
+        .executableTarget(
+            name: "MyApp",
+            dependencies: [
+                .product(name: "FFmpeg", package: "ffmpeg-swift")
+            ]
+        )
+    ]
+)
 ```
+
+### Why Swift 6.2?
+
+Swift 6.2 introduced [SE-0482: Swift Package Manager Support for Static Library Binary Targets on Non-Apple Platforms](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0482-swiftpm-static-library-binary-target-non-apple-platforms.md), which enables:
+
+- **Cross-platform binary distribution** - Pre-built FFmpeg libraries for macOS and Linux
+- **No system dependencies** - Users don't need to install FFmpeg via Homebrew or apt
+- **Consistent builds** - Same FFmpeg version across all platforms
 
 ### System Dependencies (Development Mode)
 
-By default, the package uses system-installed FFmpeg via pkg-config:
+By default, the package uses system-installed FFmpeg. Install via:
 
-#### macOS
 ```bash
+# macOS
 brew install ffmpeg
-```
 
-#### Linux (Debian/Ubuntu)
-```bash
+# Linux (Debian/Ubuntu)
 sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
 ```
 
@@ -43,90 +61,172 @@ sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev lib
 ```swift
 import FFmpeg
 
-// Get version info
-print("avcodec: \(FFmpegVersion.avcodec)")
-print("avformat: \(FFmpegVersion.avformat)")
-print("avutil: \(FFmpegVersion.avutil)")
-print("swscale: \(FFmpegVersion.swscale)")
-print("swresample: \(FFmpegVersion.swresample)")
-print("configuration: \(FFmpegVersion.configuration)")
+// Get library versions (Comparable, so you can check minimum versions)
+let avcodec = FFmpeg.Version.avcodec
+print("libavcodec: \(avcodec)")  // "61.19.100"
 
-// Access C APIs directly
+if avcodec >= Version(major: 61, minor: 0, patch: 0) {
+    print("Using FFmpeg 7.x!")
+}
+
+// Build info
+print("License: \(FFmpeg.license)")
+print("Configuration: \(FFmpeg.configuration)")
+
+// Find codecs with Swift-y API
+if let h264 = Codec.decoder(for: AV_CODEC_ID_H264) {
+    print("Found: \(h264.longName)")  // "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10"
+    print("Is decoder: \(h264.isDecoder)")  // true
+}
+
+if let aac = Codec.encoder(named: "aac") {
+    print("AAC encoder: \(aac.name)")
+}
+
+// Error handling with Swift errors
+do {
+    try FFmpegError.check(someFFmpegOperation())
+} catch let error as FFmpegError {
+    print("FFmpeg error: \(error.message)")
+}
+
+// Access C APIs directly when needed
 let codec = avcodec_find_decoder(AV_CODEC_ID_H264)
 ```
 
-## Cross-Platform Artifact Bundles (Swift 6.2+)
+## API Overview
 
-This package supports [SE-0482](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0482-swiftpm-static-library-binary-target-non-apple-platforms.md) cross-platform artifact bundles for distributing pre-built FFmpeg binaries.
+The package provides Swift-idiomatic wrappers while exposing the full C API:
 
-### Supported Platforms
+| Type | Description |
+|------|-------------|
+| `FFmpeg.Version` | Library version information |
+| `Version` | Comparable semantic version type |
+| `Codec` | Swift wrapper for `AVCodec` with static lookup methods |
+| `FFmpegError` | Swift `Error` type wrapping FFmpeg error codes |
+| `AVPixelFormat` extensions | `CustomStringConvertible`, named lookup |
+| `AVSampleFormat` extensions | `CustomStringConvertible`, `bytesPerSample`, `isPlanar` |
 
-| Platform | Architecture | Triple |
+All underlying C types (`AVCodec`, `AVFrame`, `AVPacket`, etc.) are available via `@_exported import`.
+
+## Supported Platforms
+
+| Platform | Architecture | Status |
 |----------|--------------|--------|
-| macOS | arm64 | `arm64-apple-macosx` |
-| macOS | x86_64 | `x86_64-apple-macosx` |
-| Linux | x86_64 | `x86_64-unknown-linux-gnu` |
-| Linux | aarch64 | `aarch64-unknown-linux-gnu` |
+| macOS 26+ | arm64 | ✅ |
+| macOS 26+ | x86_64 | ✅ |
+| iOS 26+ | arm64 | ✅ |
+| tvOS 26+ | arm64 | ✅ |
+| visionOS 26+ | arm64 | ✅ |
+| Linux | x86_64 | ✅ |
+| Linux | aarch64 | ✅ |
 
-### Switching to Pre-built Binaries
+## Local Development
 
-To use pre-built binaries instead of system libraries, set `useArtifactBundles = true` in Package.swift:
+### Prerequisites
+
+1. **Swift 6.2+** - Install from [swift.org](https://swift.org/download/) or Xcode 26+
+2. **FFmpeg** - System installation for development
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt install libavcodec-dev libavformat-dev libavutil-dev \
+    libswscale-dev libswresample-dev pkg-config
+```
+
+### Clone and Build
+
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/wendylabsinc/ffmpeg-swift.git
+cd ffmpeg-swift
+
+# Build
+swift build
+
+# Run tests
+swift test
+```
+
+### Project Structure
+
+```
+ffmpeg-swift/
+├── Package.swift                    # Package manifest
+├── Sources/
+│   ├── FFmpeg/
+│   │   └── FFmpeg.swift             # Swift API wrappers
+│   ├── CFFmpeg/
+│   │   ├── module.modulemap         # C module definition
+│   │   └── shim.h                   # FFmpeg header imports
+│   └── ffmpeg-source/               # FFmpeg git submodule (reference)
+├── Tests/
+│   └── FFmpegTests/
+├── Artifacts/                       # Generated artifact bundles
+├── scripts/
+│   ├── build-artifacts.sh           # Local multi-platform build
+│   └── create-artifact-bundles.sh   # CI artifact packaging
+└── .github/workflows/
+    ├── build-ffmpeg.yml             # Build & release workflow
+    └── compute-checksums.yml        # Checksum computation
+```
+
+### Switching Between Configurations
+
+The package supports two modes controlled by `useArtifactBundles` in Package.swift:
 
 ```swift
+// Use system-installed FFmpeg (default, for development)
+let useArtifactBundles = false
+
+// Use pre-built artifact bundles (for distribution)
 let useArtifactBundles = true
 ```
 
-## Building FFmpeg Artifacts
+### Building Artifact Bundles Locally
 
-### Triggering a Build
-
-1. **Manual trigger**: Go to Actions → "Build FFmpeg" → Run workflow
-2. **Tag release**: Push a tag like `v1.0.0` to automatically build and release
+```bash
+# Build FFmpeg for current platform
+cd Sources/ffmpeg-source
+./configure --prefix=$(pwd)/../../build/local \
+    --enable-static --disable-shared \
+    --disable-programs --disable-doc
+make -j$(nproc)
+make install
+```
 
 ### Creating a Release
 
-1. Push a version tag:
+1. Tag and push:
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
 
-2. The workflow will:
-   - Build FFmpeg for all platforms (macOS arm64/x86_64, Linux x86_64/aarch64)
+2. GitHub Actions will:
+   - Build FFmpeg for all 4 platform/arch combinations
    - Package into SE-0482 artifact bundles
-   - Create a GitHub release with the artifacts
-   - Compute and append checksums to release notes
+   - Create release with artifacts attached
+   - Compute and append Swift package checksums
 
-3. Update Package.swift with the checksums from the release notes
-
-## Project Structure
-
-```
-ffmpeg-swift/
-├── Package.swift                 # Main package manifest
-├── Sources/
-│   ├── FFmpeg/                   # Swift wrapper
-│   ├── CFFmpeg/                  # C module map (system library)
-│   └── ffmpeg-source/            # FFmpeg git submodule
-├── Artifacts/                    # Generated artifact bundles
-├── scripts/
-│   ├── build-artifacts.sh        # Local build script
-│   └── create-artifact-bundles.sh # CI packaging script
-└── .github/workflows/
-    ├── build-ffmpeg.yml          # Build & release workflow
-    └── compute-checksums.yml     # Checksum computation
-```
+3. Update `Package.swift` with checksums from release notes
 
 ## FFmpeg Libraries Included
 
-- **libavcodec** - Audio/video codec library
-- **libavformat** - Container format I/O
-- **libavutil** - Utility functions
-- **libswscale** - Video scaling and conversion
-- **libswresample** - Audio resampling
+| Library | Description |
+|---------|-------------|
+| libavcodec | Audio/video codec encoding and decoding |
+| libavformat | Container format I/O and muxing/demuxing |
+| libavutil | Utility functions (memory, math, logging) |
+| libswscale | Video scaling and pixel format conversion |
+| libswresample | Audio resampling and format conversion |
 
 ## License
 
-FFmpeg is licensed under LGPL 2.1+ with optional GPL components. See the [FFmpeg License](https://ffmpeg.org/legal.html) for details.
+- **This Swift package**: MIT License
+- **FFmpeg**: LGPL 2.1+ / GPL (depending on build configuration)
 
-This Swift package wrapper is MIT licensed.
+See [FFmpeg License](https://ffmpeg.org/legal.html) for details on FFmpeg licensing.
