@@ -1,0 +1,73 @@
+name: Compute Checksums
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to compute checksums for'
+        required: true
+
+jobs:
+  compute-checksums:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download release assets
+        run: |
+          mkdir -p artifacts
+          gh release download ${{ steps.tag.outputs.tag }} --dir artifacts --pattern "*.zip"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute checksums
+        id: checksums
+        run: |
+          echo "## Swift Package Checksums for ${{ steps.tag.outputs.tag }}" > checksums.md
+          echo "" >> checksums.md
+          echo "Update your Package.swift with these checksums:" >> checksums.md
+          echo "" >> checksums.md
+          echo '```swift' >> checksums.md
+
+          for file in artifacts/*.zip; do
+            if [ -f "$file" ]; then
+              name=$(basename "$file" .artifactbundle.zip)
+              checksum=$(swift package compute-checksum "$file")
+              echo ".binaryTarget(" >> checksums.md
+              echo "    name: \"C$name\"," >> checksums.md
+              echo "    url: \"https://github.com/wendylabsinc/ffmpeg-swift/releases/download/${{ steps.tag.outputs.tag }}/$name.artifactbundle.zip\"," >> checksums.md
+              echo "    checksum: \"$checksum\"" >> checksums.md
+              echo ")," >> checksums.md
+              echo "" >> checksums.md
+            fi
+          done
+
+          echo '```' >> checksums.md
+
+          cat checksums.md
+
+      - name: Update release notes
+        run: |
+          gh release view ${{ steps.tag.outputs.tag }} --json body -q .body > current_notes.md
+          echo "" >> current_notes.md
+          cat checksums.md >> current_notes.md
+          gh release edit ${{ steps.tag.outputs.tag }} --notes-file current_notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload checksums artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: checksums.md

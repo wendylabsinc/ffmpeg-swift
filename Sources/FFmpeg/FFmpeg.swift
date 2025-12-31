@@ -1,7 +1,17 @@
 // FFmpeg Swift Bindings
 // Swift 6.2+ wrapper for FFmpeg libraries
 
+#if canImport(CFFmpeg)
+// System library configuration
 @_exported import CFFmpeg
+#else
+// Artifact bundle configuration - import individual modules
+@_exported import Clibavcodec
+@_exported import Clibavformat
+@_exported import Clibavutil
+@_exported import Clibswscale
+@_exported import Clibswresample
+#endif
 
 /// FFmpeg version information
 public struct FFmpegVersion: Sendable {
