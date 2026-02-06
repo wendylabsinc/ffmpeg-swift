@@ -622,12 +622,19 @@ jobs:
           install: >-
             base-devel
             mingw-w64-ucrt-x86_64-toolchain
-            mingw-w64-ucrt-x86_64-llvm-mingw
             curl
             tar
             xz
             diffutils
             make
+
+      - name: Install llvm-mingw for aarch64 cross-compilation
+        run: |
+          curl -L "https://github.com/mstorsjo/llvm-mingw/releases/download/20250114/llvm-mingw-20250114-ucrt-x86_64.zip" -o llvm-mingw.zip
+          unzip -q llvm-mingw.zip
+          mv llvm-mingw-20250114-ucrt-x86_64 /ucrt64/opt/llvm-mingw
+          export PATH="/ucrt64/opt/llvm-mingw/bin:$PATH"
+          aarch64-w64-mingw32-gcc --version
 
       - name: Download FFmpeg source
         run: |
@@ -636,6 +643,7 @@ jobs:
 
       - name: Build FFmpeg
         run: |
+          export PATH="/ucrt64/opt/llvm-mingw/bin:$PATH"
           mkdir -p build && cd build
           ../ffmpeg-${FFMPEG_VERSION}/configure \
             --prefix="$(pwd)/../install" \
