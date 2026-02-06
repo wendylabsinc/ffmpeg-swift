@@ -10,8 +10,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "CFFmpeg",
-            url: "https://github.com/wendylabsinc/ffmpeg-swift/releases/download/0.0.1/CFFmpeg.artifactbundle.zip",
-            checksum: "cc73b3315ca0acc7ff80a066f9225e5141b503eaa40edee797054bae1d7d632e"
+            url: "https://github.com/wendylabsinc/ffmpeg-swift/releases/download/0.0.2/CFFmpeg.artifactbundle.zip",
+            checksum: "94a719e9ecece569425f06c3e4d91655e94ca7130fdd9c7cc37613096638e2e3"
         ),
         .target(
             name: "CFFmpegShim",
