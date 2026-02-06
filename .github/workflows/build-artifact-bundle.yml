@@ -48,7 +48,7 @@ jobs:
             sdk: iphoneos
             min_version_flag: -mios-version-min=16.0
             configure_os: darwin
-            extra_configure: --enable-cross-compile --enable-videotoolbox --enable-audiotoolbox --enable-neon
+            extra_configure: --enable-cross-compile --enable-videotoolbox --enable-neon --disable-avdevice
           - platform: tvos-arm64
             arch: arm64
             target: arm64-apple-tvos
@@ -66,6 +66,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: brew install nasm
 
       - name: Download FFmpeg source
         run: |
@@ -602,7 +605,7 @@ jobs:
           path: output/windows-x86_64
 
   # ===========================================================================
-  # Windows arm64 (cross-compiled from x86_64)
+  # Windows arm64 (cross-compiled from x86_64 using llvm-mingw)
   # ===========================================================================
   build-windows-arm64:
     runs-on: windows-latest
@@ -614,12 +617,12 @@ jobs:
 
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: CLANGARM64
+          msystem: UCRT64
           update: true
           install: >-
             base-devel
-            mingw-w64-clang-aarch64-toolchain
-            mingw-w64-clang-aarch64-nasm
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-llvm-mingw
             curl
             tar
             xz
@@ -639,7 +642,8 @@ jobs:
             --arch=aarch64 \
             --target-os=mingw64 \
             --enable-cross-compile \
-            --cc=aarch64-w64-mingw32-clang \
+            --cross-prefix=aarch64-w64-mingw32- \
+            --cc=aarch64-w64-mingw32-gcc \
             --enable-static \
             --disable-shared \
             --enable-pic \
@@ -663,6 +667,7 @@ jobs:
             --disable-cuvid \
             --disable-nvenc \
             --disable-nvdec \
+            --disable-x86asm \
             --enable-neon
 
           make -j$(nproc)
