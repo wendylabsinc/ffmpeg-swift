@@ -1,0 +1,896 @@
+name: Build Artifact Bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      ffmpeg_version:
+        description: 'FFmpeg version to build'
+        required: true
+        default: '7.1'
+      release_tag:
+        description: 'Release tag (e.g. 0.0.2). Leave empty for no release.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  FFMPEG_VERSION: ${{ inputs.ffmpeg_version || '7.1' }}
+
+jobs:
+  # ===========================================================================
+  # Apple platforms — built on macOS with Xcode cross-compilation
+  # ===========================================================================
+  build-apple:
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            arch: arm64
+            target: arm64-apple-macosx
+            sdk: macosx
+            min_version_flag: -mmacosx-version-min=14.0
+            configure_os: darwin
+            extra_configure: --enable-videotoolbox --enable-audiotoolbox --enable-neon
+          - platform: macos-x86_64
+            arch: x86_64
+            target: x86_64-apple-macosx
+            sdk: macosx
+            min_version_flag: -mmacosx-version-min=14.0
+            configure_os: darwin
+            extra_configure: --enable-videotoolbox --enable-audiotoolbox
+          - platform: ios-arm64
+            arch: arm64
+            target: arm64-apple-ios
+            sdk: iphoneos
+            min_version_flag: -mios-version-min=16.0
+            configure_os: darwin
+            extra_configure: --enable-cross-compile --enable-videotoolbox --enable-audiotoolbox --enable-neon
+          - platform: tvos-arm64
+            arch: arm64
+            target: arm64-apple-tvos
+            sdk: appletvos
+            min_version_flag: -mtvos-version-min=16.0
+            configure_os: darwin
+            extra_configure: --enable-cross-compile --enable-neon
+          - platform: watchos-arm64
+            arch: arm64
+            target: arm64-apple-watchos
+            sdk: watchos
+            min_version_flag: -mwatchos-version-min=9.0
+            configure_os: darwin
+            extra_configure: --enable-cross-compile --enable-neon --disable-avfilter --disable-avformat --disable-swscale --disable-postproc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download FFmpeg source
+        run: |
+          curl -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz
+          tar xf ffmpeg.tar.xz
+
+      - name: Build FFmpeg
+        run: |
+          SDK_PATH=$(xcrun --sdk ${{ matrix.sdk }} --show-sdk-path)
+          CC="xcrun --sdk ${{ matrix.sdk }} clang -arch ${{ matrix.arch }} -isysroot ${SDK_PATH}"
+
+          mkdir -p build && cd build
+          ../ffmpeg-${FFMPEG_VERSION}/configure \
+            --prefix="$(pwd)/../install" \
+            --arch=${{ matrix.arch }} \
+            --target-os=${{ matrix.configure_os }} \
+            --cc="${CC}" \
+            --extra-cflags="-arch ${{ matrix.arch }} ${{ matrix.min_version_flag }} -isysroot ${SDK_PATH}" \
+            --extra-ldflags="-arch ${{ matrix.arch }} ${{ matrix.min_version_flag }} -isysroot ${SDK_PATH}" \
+            --enable-static \
+            --disable-shared \
+            --enable-pic \
+            --disable-programs \
+            --disable-doc \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-gpl \
+            --enable-version3 \
+            --disable-network \
+            --disable-iconv \
+            --disable-securetransport \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-sdl2 \
+            --disable-vulkan \
+            --disable-vaapi \
+            --disable-vdpau \
+            --disable-d3d11va \
+            --disable-dxva2 \
+            --disable-cuda \
+            --disable-cuvid \
+            --disable-nvenc \
+            --disable-nvdec \
+            ${{ matrix.extra_configure }}
+
+          make -j$(sysctl -n hw.ncpu)
+          make install
+
+      - name: Merge static libraries
+        run: |
+          LIBS=""
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -f "install/lib/${lib}.a" ]; then
+              LIBS="${LIBS} install/lib/${lib}.a"
+            fi
+          done
+          mkdir -p output/${{ matrix.platform }}
+          libtool -static -o output/${{ matrix.platform }}/libcffmpeg.a ${LIBS}
+
+      - name: Copy headers
+        run: |
+          mkdir -p output/${{ matrix.platform }}/include
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -d "install/include/${lib}" ]; then
+              cp -R "install/include/${lib}" "output/${{ matrix.platform }}/include/"
+            fi
+          done
+
+      - name: Generate module.modulemap
+        run: |
+          cat > output/${{ matrix.platform }}/include/module.modulemap << 'MODULEMAP'
+          module CFFmpeg {
+              header "libavutil/avutil.h"
+              header "libavutil/opt.h"
+              header "libavutil/dict.h"
+              header "libavutil/log.h"
+              header "libavutil/error.h"
+              header "libavutil/mem.h"
+              header "libavutil/pixfmt.h"
+              header "libavutil/pixdesc.h"
+              header "libavutil/samplefmt.h"
+              header "libavutil/channel_layout.h"
+              header "libavutil/frame.h"
+              header "libavutil/rational.h"
+              header "libavutil/imgutils.h"
+              header "libavutil/mathematics.h"
+              header "libavutil/timestamp.h"
+              header "libavutil/avstring.h"
+              header "libavutil/buffer.h"
+              header "libavutil/common.h"
+              header "libavutil/hwcontext.h"
+
+              header "libavcodec/avcodec.h"
+              header "libavcodec/codec.h"
+              header "libavcodec/codec_id.h"
+              header "libavcodec/codec_par.h"
+              header "libavcodec/packet.h"
+
+              header "libavformat/avformat.h"
+              header "libavformat/avio.h"
+
+              header "libavfilter/avfilter.h"
+              header "libavfilter/buffersink.h"
+              header "libavfilter/buffersrc.h"
+
+              header "libswscale/swscale.h"
+              header "libswresample/swresample.h"
+
+              link "z"
+              link "bz2"
+              link "m"
+              link "pthread"
+
+              link framework "VideoToolbox"
+              link framework "CoreMedia"
+              link framework "CoreVideo"
+              link framework "CoreFoundation"
+              link framework "CoreServices"
+              link framework "AudioToolbox"
+              link framework "Security"
+
+              export *
+          }
+          MODULEMAP
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-${{ matrix.platform }}
+          path: output/${{ matrix.platform }}
+
+  # ===========================================================================
+  # Linux x86_64
+  # ===========================================================================
+  build-linux-x86_64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential yasm nasm pkg-config curl xz-utils
+
+      - name: Download FFmpeg source
+        run: |
+          curl -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz
+          tar xf ffmpeg.tar.xz
+
+      - name: Build FFmpeg
+        run: |
+          mkdir -p build && cd build
+          ../ffmpeg-${FFMPEG_VERSION}/configure \
+            --prefix="$(pwd)/../install" \
+            --arch=x86_64 \
+            --target-os=linux \
+            --enable-static \
+            --disable-shared \
+            --enable-pic \
+            --disable-programs \
+            --disable-doc \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-gpl \
+            --enable-version3 \
+            --disable-network \
+            --disable-iconv \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-sdl2 \
+            --disable-vulkan \
+            --disable-vaapi \
+            --disable-vdpau \
+            --disable-d3d11va \
+            --disable-dxva2 \
+            --disable-cuda \
+            --disable-cuvid \
+            --disable-nvenc \
+            --disable-nvdec
+
+          make -j$(nproc)
+          make install
+
+      - name: Merge static libraries
+        run: |
+          mkdir -p output/linux-x86_64
+          MRI_SCRIPT="merge.mri"
+          echo "CREATE output/linux-x86_64/libcffmpeg.a" > $MRI_SCRIPT
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -f "install/lib/${lib}.a" ]; then
+              echo "ADDLIB install/lib/${lib}.a" >> $MRI_SCRIPT
+            fi
+          done
+          echo "SAVE" >> $MRI_SCRIPT
+          echo "END" >> $MRI_SCRIPT
+          ar -M < $MRI_SCRIPT
+
+      - name: Copy headers
+        run: |
+          mkdir -p output/linux-x86_64/include
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -d "install/include/${lib}" ]; then
+              cp -R "install/include/${lib}" "output/linux-x86_64/include/"
+            fi
+          done
+
+      - name: Generate module.modulemap
+        run: |
+          cat > output/linux-x86_64/include/module.modulemap << 'MODULEMAP'
+          module CFFmpeg {
+              header "libavutil/avutil.h"
+              header "libavutil/opt.h"
+              header "libavutil/dict.h"
+              header "libavutil/log.h"
+              header "libavutil/error.h"
+              header "libavutil/mem.h"
+              header "libavutil/pixfmt.h"
+              header "libavutil/pixdesc.h"
+              header "libavutil/samplefmt.h"
+              header "libavutil/channel_layout.h"
+              header "libavutil/frame.h"
+              header "libavutil/rational.h"
+              header "libavutil/imgutils.h"
+              header "libavutil/mathematics.h"
+              header "libavutil/timestamp.h"
+              header "libavutil/avstring.h"
+              header "libavutil/buffer.h"
+              header "libavutil/common.h"
+              header "libavutil/hwcontext.h"
+
+              header "libavcodec/avcodec.h"
+              header "libavcodec/codec.h"
+              header "libavcodec/codec_id.h"
+              header "libavcodec/codec_par.h"
+              header "libavcodec/packet.h"
+
+              header "libavformat/avformat.h"
+              header "libavformat/avio.h"
+
+              header "libavfilter/avfilter.h"
+              header "libavfilter/buffersink.h"
+              header "libavfilter/buffersrc.h"
+
+              header "libswscale/swscale.h"
+              header "libswresample/swresample.h"
+
+              link "z"
+              link "bz2"
+              link "m"
+              link "pthread"
+
+              export *
+          }
+          MODULEMAP
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-linux-x86_64
+          path: output/linux-x86_64
+
+  # ===========================================================================
+  # Linux aarch64
+  # ===========================================================================
+  build-linux-aarch64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential yasm nasm pkg-config curl xz-utils
+
+      - name: Download FFmpeg source
+        run: |
+          curl -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz
+          tar xf ffmpeg.tar.xz
+
+      - name: Build FFmpeg
+        run: |
+          mkdir -p build && cd build
+          ../ffmpeg-${FFMPEG_VERSION}/configure \
+            --prefix="$(pwd)/../install" \
+            --arch=aarch64 \
+            --target-os=linux \
+            --enable-static \
+            --disable-shared \
+            --enable-pic \
+            --disable-programs \
+            --disable-doc \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-gpl \
+            --enable-version3 \
+            --disable-network \
+            --disable-iconv \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-sdl2 \
+            --disable-vulkan \
+            --disable-vaapi \
+            --disable-vdpau \
+            --disable-d3d11va \
+            --disable-dxva2 \
+            --disable-cuda \
+            --disable-cuvid \
+            --disable-nvenc \
+            --disable-nvdec \
+            --enable-neon
+
+          make -j$(nproc)
+          make install
+
+      - name: Merge static libraries
+        run: |
+          mkdir -p output/linux-aarch64
+          MRI_SCRIPT="merge.mri"
+          echo "CREATE output/linux-aarch64/libcffmpeg.a" > $MRI_SCRIPT
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -f "install/lib/${lib}.a" ]; then
+              echo "ADDLIB install/lib/${lib}.a" >> $MRI_SCRIPT
+            fi
+          done
+          echo "SAVE" >> $MRI_SCRIPT
+          echo "END" >> $MRI_SCRIPT
+          ar -M < $MRI_SCRIPT
+
+      - name: Copy headers
+        run: |
+          mkdir -p output/linux-aarch64/include
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -d "install/include/${lib}" ]; then
+              cp -R "install/include/${lib}" "output/linux-aarch64/include/"
+            fi
+          done
+
+      - name: Generate module.modulemap
+        run: |
+          cat > output/linux-aarch64/include/module.modulemap << 'MODULEMAP'
+          module CFFmpeg {
+              header "libavutil/avutil.h"
+              header "libavutil/opt.h"
+              header "libavutil/dict.h"
+              header "libavutil/log.h"
+              header "libavutil/error.h"
+              header "libavutil/mem.h"
+              header "libavutil/pixfmt.h"
+              header "libavutil/pixdesc.h"
+              header "libavutil/samplefmt.h"
+              header "libavutil/channel_layout.h"
+              header "libavutil/frame.h"
+              header "libavutil/rational.h"
+              header "libavutil/imgutils.h"
+              header "libavutil/mathematics.h"
+              header "libavutil/timestamp.h"
+              header "libavutil/avstring.h"
+              header "libavutil/buffer.h"
+              header "libavutil/common.h"
+              header "libavutil/hwcontext.h"
+
+              header "libavcodec/avcodec.h"
+              header "libavcodec/codec.h"
+              header "libavcodec/codec_id.h"
+              header "libavcodec/codec_par.h"
+              header "libavcodec/packet.h"
+
+              header "libavformat/avformat.h"
+              header "libavformat/avio.h"
+
+              header "libavfilter/avfilter.h"
+              header "libavfilter/buffersink.h"
+              header "libavfilter/buffersrc.h"
+
+              header "libswscale/swscale.h"
+              header "libswresample/swresample.h"
+
+              link "z"
+              link "bz2"
+              link "m"
+              link "pthread"
+
+              export *
+          }
+          MODULEMAP
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-linux-aarch64
+          path: output/linux-aarch64
+
+  # ===========================================================================
+  # Windows x86_64
+  # ===========================================================================
+  build-windows-x86_64:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-yasm
+            mingw-w64-ucrt-x86_64-nasm
+            curl
+            tar
+            xz
+            diffutils
+            make
+
+      - name: Download FFmpeg source
+        run: |
+          curl -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz
+          tar xf ffmpeg.tar.xz
+
+      - name: Build FFmpeg
+        run: |
+          mkdir -p build && cd build
+          ../ffmpeg-${FFMPEG_VERSION}/configure \
+            --prefix="$(pwd)/../install" \
+            --arch=x86_64 \
+            --target-os=mingw64 \
+            --enable-static \
+            --disable-shared \
+            --enable-pic \
+            --disable-programs \
+            --disable-doc \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-gpl \
+            --enable-version3 \
+            --disable-network \
+            --disable-iconv \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-sdl2 \
+            --disable-vulkan \
+            --disable-vaapi \
+            --disable-vdpau \
+            --disable-d3d11va \
+            --disable-dxva2 \
+            --disable-cuda \
+            --disable-cuvid \
+            --disable-nvenc \
+            --disable-nvdec
+
+          make -j$(nproc)
+          make install
+
+      - name: Merge static libraries
+        run: |
+          mkdir -p output/windows-x86_64
+          MRI_SCRIPT="merge.mri"
+          echo "CREATE output/windows-x86_64/libcffmpeg.a" > $MRI_SCRIPT
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -f "install/lib/${lib}.a" ]; then
+              echo "ADDLIB install/lib/${lib}.a" >> $MRI_SCRIPT
+            fi
+          done
+          echo "SAVE" >> $MRI_SCRIPT
+          echo "END" >> $MRI_SCRIPT
+          ar -M < $MRI_SCRIPT
+
+      - name: Copy headers
+        run: |
+          mkdir -p output/windows-x86_64/include
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -d "install/include/${lib}" ]; then
+              cp -R "install/include/${lib}" "output/windows-x86_64/include/"
+            fi
+          done
+
+      - name: Generate module.modulemap
+        run: |
+          cat > output/windows-x86_64/include/module.modulemap << 'MODULEMAP'
+          module CFFmpeg {
+              header "libavutil/avutil.h"
+              header "libavutil/opt.h"
+              header "libavutil/dict.h"
+              header "libavutil/log.h"
+              header "libavutil/error.h"
+              header "libavutil/mem.h"
+              header "libavutil/pixfmt.h"
+              header "libavutil/pixdesc.h"
+              header "libavutil/samplefmt.h"
+              header "libavutil/channel_layout.h"
+              header "libavutil/frame.h"
+              header "libavutil/rational.h"
+              header "libavutil/imgutils.h"
+              header "libavutil/mathematics.h"
+              header "libavutil/timestamp.h"
+              header "libavutil/avstring.h"
+              header "libavutil/buffer.h"
+              header "libavutil/common.h"
+              header "libavutil/hwcontext.h"
+
+              header "libavcodec/avcodec.h"
+              header "libavcodec/codec.h"
+              header "libavcodec/codec_id.h"
+              header "libavcodec/codec_par.h"
+              header "libavcodec/packet.h"
+
+              header "libavformat/avformat.h"
+              header "libavformat/avio.h"
+
+              header "libavfilter/avfilter.h"
+              header "libavfilter/buffersink.h"
+              header "libavfilter/buffersrc.h"
+
+              header "libswscale/swscale.h"
+              header "libswresample/swresample.h"
+
+              link "z"
+              link "bz2"
+              link "m"
+              link "pthread"
+
+              export *
+          }
+          MODULEMAP
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-x86_64
+          path: output/windows-x86_64
+
+  # ===========================================================================
+  # Windows arm64 (cross-compiled from x86_64)
+  # ===========================================================================
+  build-windows-arm64:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANGARM64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-clang-aarch64-toolchain
+            mingw-w64-clang-aarch64-nasm
+            curl
+            tar
+            xz
+            diffutils
+            make
+
+      - name: Download FFmpeg source
+        run: |
+          curl -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz
+          tar xf ffmpeg.tar.xz
+
+      - name: Build FFmpeg
+        run: |
+          mkdir -p build && cd build
+          ../ffmpeg-${FFMPEG_VERSION}/configure \
+            --prefix="$(pwd)/../install" \
+            --arch=aarch64 \
+            --target-os=mingw64 \
+            --enable-cross-compile \
+            --cc=aarch64-w64-mingw32-clang \
+            --enable-static \
+            --disable-shared \
+            --enable-pic \
+            --disable-programs \
+            --disable-doc \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-gpl \
+            --enable-version3 \
+            --disable-network \
+            --disable-iconv \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-sdl2 \
+            --disable-vulkan \
+            --disable-vaapi \
+            --disable-vdpau \
+            --disable-d3d11va \
+            --disable-dxva2 \
+            --disable-cuda \
+            --disable-cuvid \
+            --disable-nvenc \
+            --disable-nvdec \
+            --enable-neon
+
+          make -j$(nproc)
+          make install
+
+      - name: Merge static libraries
+        run: |
+          mkdir -p output/windows-arm64
+          MRI_SCRIPT="merge.mri"
+          echo "CREATE output/windows-arm64/libcffmpeg.a" > $MRI_SCRIPT
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -f "install/lib/${lib}.a" ]; then
+              echo "ADDLIB install/lib/${lib}.a" >> $MRI_SCRIPT
+            fi
+          done
+          echo "SAVE" >> $MRI_SCRIPT
+          echo "END" >> $MRI_SCRIPT
+          ar -M < $MRI_SCRIPT
+
+      - name: Copy headers
+        run: |
+          mkdir -p output/windows-arm64/include
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -d "install/include/${lib}" ]; then
+              cp -R "install/include/${lib}" "output/windows-arm64/include/"
+            fi
+          done
+
+      - name: Generate module.modulemap
+        run: |
+          cat > output/windows-arm64/include/module.modulemap << 'MODULEMAP'
+          module CFFmpeg {
+              header "libavutil/avutil.h"
+              header "libavutil/opt.h"
+              header "libavutil/dict.h"
+              header "libavutil/log.h"
+              header "libavutil/error.h"
+              header "libavutil/mem.h"
+              header "libavutil/pixfmt.h"
+              header "libavutil/pixdesc.h"
+              header "libavutil/samplefmt.h"
+              header "libavutil/channel_layout.h"
+              header "libavutil/frame.h"
+              header "libavutil/rational.h"
+              header "libavutil/imgutils.h"
+              header "libavutil/mathematics.h"
+              header "libavutil/timestamp.h"
+              header "libavutil/avstring.h"
+              header "libavutil/buffer.h"
+              header "libavutil/common.h"
+              header "libavutil/hwcontext.h"
+
+              header "libavcodec/avcodec.h"
+              header "libavcodec/codec.h"
+              header "libavcodec/codec_id.h"
+              header "libavcodec/codec_par.h"
+              header "libavcodec/packet.h"
+
+              header "libavformat/avformat.h"
+              header "libavformat/avio.h"
+
+              header "libavfilter/avfilter.h"
+              header "libavfilter/buffersink.h"
+              header "libavfilter/buffersrc.h"
+
+              header "libswscale/swscale.h"
+              header "libswresample/swresample.h"
+
+              link "z"
+              link "bz2"
+              link "m"
+              link "pthread"
+
+              export *
+          }
+          MODULEMAP
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-arm64
+          path: output/windows-arm64
+
+  # ===========================================================================
+  # Assemble artifact bundle + optional release
+  # ===========================================================================
+  assemble:
+    needs:
+      - build-apple
+      - build-linux-x86_64
+      - build-linux-aarch64
+      - build-windows-x86_64
+      - build-windows-arm64
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Assemble artifact bundle
+        run: |
+          BUNDLE="CFFmpeg.artifactbundle"
+          mkdir -p "${BUNDLE}"
+
+          # Copy each platform into the bundle
+          for dir in artifacts/ffmpeg-*; do
+            platform=$(basename "$dir" | sed 's/^ffmpeg-//')
+            echo "==> Adding platform: ${platform}"
+            mkdir -p "${BUNDLE}/${platform}"
+            cp -R "${dir}/"* "${BUNDLE}/${platform}/"
+          done
+
+          ls -la "${BUNDLE}/"
+
+      - name: Generate info.json
+        run: |
+          BUNDLE="CFFmpeg.artifactbundle"
+
+          # Build variants JSON
+          python3 << 'PYEOF'
+          import json, os
+
+          triple_map = {
+              "macos-arm64":     "arm64-apple-macosx",
+              "macos-x86_64":    "x86_64-apple-macosx",
+              "ios-arm64":       "arm64-apple-ios",
+              "tvos-arm64":      "arm64-apple-tvos",
+              "watchos-arm64":   "arm64-apple-watchos",
+              "linux-x86_64":    "x86_64-unknown-linux-gnu",
+              "linux-aarch64":   "aarch64-unknown-linux-gnu",
+              "windows-x86_64":  "x86_64-unknown-windows-msvc",
+              "windows-arm64":   "aarch64-unknown-windows-msvc",
+          }
+
+          bundle = os.environ.get("BUNDLE", "CFFmpeg.artifactbundle")
+          version = os.environ.get("FFMPEG_VERSION", "7.1")
+          variants = []
+
+          for platform_dir in sorted(os.listdir(bundle)):
+              full_path = os.path.join(bundle, platform_dir)
+              lib_path = os.path.join(full_path, "libcffmpeg.a")
+              if not os.path.isfile(lib_path):
+                  continue
+              triple = triple_map.get(platform_dir)
+              if not triple:
+                  print(f"WARNING: Unknown platform {platform_dir}, skipping")
+                  continue
+              variants.append({
+                  "path": f"{platform_dir}/libcffmpeg.a",
+                  "supportedTriples": [triple],
+                  "staticLibraryMetadata": {
+                      "headerPaths": [f"{platform_dir}/include"],
+                      "moduleMapPath": f"{platform_dir}/include/module.modulemap"
+                  }
+              })
+
+          info = {
+              "schemaVersion": "1.0",
+              "artifacts": {
+                  "CFFmpeg": {
+                      "type": "staticLibrary",
+                      "version": f"{version}.0",
+                      "variants": variants
+                  }
+              }
+          }
+
+          with open(os.path.join(bundle, "info.json"), "w") as f:
+              json.dump(info, f, indent=2)
+              f.write("\n")
+
+          print(f"Generated info.json with {len(variants)} variants")
+          PYEOF
+
+          cat "${BUNDLE}/info.json"
+
+      - name: Create zip
+        run: |
+          zip -r CFFmpeg.artifactbundle.zip CFFmpeg.artifactbundle
+          ls -lh CFFmpeg.artifactbundle.zip
+          swift package compute-checksum CFFmpeg.artifactbundle.zip > checksum.txt
+          echo "Checksum: $(cat checksum.txt)"
+
+      - name: Upload assembled bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: CFFmpeg-artifactbundle
+          path: |
+            CFFmpeg.artifactbundle.zip
+            checksum.txt
+
+      - name: Create GitHub Release
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          CHECKSUM=$(cat checksum.txt)
+
+          gh release create "${RELEASE_TAG}" \
+            --title "${RELEASE_TAG}" \
+            --notes "$(cat <<EOF
+          ## FFmpeg Swift Package ${RELEASE_TAG}
+
+          FFmpeg ${FFMPEG_VERSION} pre-built static libraries for Swift Package Manager.
+
+          ### Platforms
+          $(ls -d CFFmpeg.artifactbundle/*/ | sed 's|CFFmpeg.artifactbundle/||;s|/||' | while read p; do echo "- ${p}"; done)
+
+          ### Usage
+
+          \`\`\`swift
+          .binaryTarget(
+              name: "CFFmpeg",
+              url: "https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/CFFmpeg.artifactbundle.zip",
+              checksum: "${CHECKSUM}"
+          )
+          \`\`\`
+
+          ### Checksum
+          \`\`\`
+          ${CHECKSUM}
+          \`\`\`
+          EOF
+          )" \
+            CFFmpeg.artifactbundle.zip
+
+          echo "Release created: https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}"

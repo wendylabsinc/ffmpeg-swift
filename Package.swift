@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "ffmpeg-swift",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .iOS(.v16), .tvOS(.v16), .watchOS(.v9)],
     products: [
         .library(name: "FFmpeg", targets: ["FFmpeg"]),
     ],
