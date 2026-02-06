@@ -197,8 +197,8 @@ The script downloads FFmpeg 7.1 source, builds static libraries, merges them int
 
 ## Requirements
 
-- Swift 6.0+ (uses ~Copyable types)
-- macOS 14+ or Linux
+- Swift 6.2+ (SE-0482 static library artifact bundles require Swift 6.2+)
+- macOS 14+, iOS 16+, tvOS 16+, watchOS 9+, or Linux
 
 ## License
 
