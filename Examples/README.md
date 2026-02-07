@@ -1,125 +1,40 @@
 # Examples
 
-These examples show how to use the high-level `FFmpeg` API. They are intentionally small and focus on one concept at a time.
+These are runnable SwiftPM executables. Each can be executed with `swift run` from the repo root.
+
+The default input file is:
+`Examples/file_example_MP4_1280_10MG.mp4`
+
+## Build once
+
+```bash
+swift build
+```
 
 ## 1) Inspect streams and duration
 
-```swift
-import FFmpeg
-
-let ctx = try FormatContext.openInput(url: "input.mp4")
-
-print("Duration (s):", ctx.durationSeconds ?? -1)
-
-for stream in ctx.streams {
-    print("#\(stream.index) type=\(stream.mediaType) codec=\(stream.codecID) timeBase=\(stream.timeBase)")
-}
+```bash
+swift run example-inspect [input-path]
 ```
 
-## 2) Decode video frames with `MediaReader`
+## 2) Decode video frames
 
-```swift
-import FFmpeg
-
-let reader = try MediaReader(url: "input.mp4")
-
-for try await owned in reader.videoFrames() {
-    let frame = owned.takeFrame()
-    print("frame: \(frame.width)x\(frame.height) pts=\(frame.pts)")
-}
+```bash
+swift run example-decode [input-path] [max-frames]
 ```
 
-## 3) Scale frames with `VideoScaler`
+## 3) Filter frames (scale + hflip)
 
-```swift
-import FFmpeg
-
-let reader = try MediaReader(url: "input.mp4")
-
-for try await owned in reader.videoFrames() {
-    var src = owned.takeFrame()
-
-    var dst = Frame()
-    dst.width = 320
-    dst.height = 240
-    dst.pixelFormat = src.pixelFormat
-    try dst.allocateBuffers()
-
-    let scaler = try VideoScaler(
-        srcWidth: src.width,
-        srcHeight: src.height,
-        srcFormat: src.pixelFormat,
-        dstWidth: dst.width,
-        dstHeight: dst.height,
-        dstFormat: dst.pixelFormat
-    )
-
-    try scaler.scale(source: src, into: &dst)
-
-    // Use dst...
-}
+```bash
+swift run example-filter [input-path] [max-frames]
 ```
 
-## 4) Filter frames with `FilterGraph`
+## 4) Encode a short clip (H.264)
 
-```swift
-import FFmpeg
-
-let reader = try MediaReader(url: "input.mp4")
-let graph = try FilterGraph()
-
-// Example: scale + hflip (configure lazily from first frame)
-var configured = false
-
-for try await owned in reader.videoFrames() {
-    var frame = owned.takeFrame()
-    if !configured {
-        try graph.configureVideo(
-            filterDescription: "scale=320:240,hflip",
-            width: frame.width,
-            height: frame.height,
-            pixelFormat: frame.pixelFormat,
-            timeBase: frame.timeBase
-        )
-        configured = true
-    }
-    try graph.push(frame: frame)
-
-    var filtered = Frame()
-    while true {
-        let result = try graph.pull(into: &filtered)
-        if result != .success { break }
-        // Use filtered...
-    }
-}
+```bash
+swift run example-encode [input-path] [output-path] [max-frames]
 ```
 
-## 5) Encode with `MediaWriter`
-
-```swift
-import FFmpeg
-import CFFmpegShim
-
-let reader = try MediaReader(url: "input.mp4")
-var writer: MediaWriter? = nil
-let timeBase = Rational(numerator: 1, denominator: 30)
-
-for try await owned in reader.videoFrames() {
-    let frame = owned.takeFrame()
-    if writer == nil {
-        let w = try MediaWriter(url: "output.mp4", formatName: "mp4")
-        try w.addVideoStream(
-            codecID: AV_CODEC_ID_H264,
-            width: frame.width,
-            height: frame.height,
-            pixelFormat: frame.pixelFormat,
-            timeBase: timeBase
-        )
-        try w.start()
-        writer = w
-    }
-    try writer?.writeVideoFrame(frame)
-}
-
-try writer?.finish()
-```
+Notes:
+- The encode example assumes the H.264 encoder accepts the input pixel format. If it fails, you may need to add a conversion step.
+- Output defaults to `Examples/output.mp4`.

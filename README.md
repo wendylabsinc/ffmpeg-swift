@@ -121,7 +121,16 @@ while try fmt.readFrame(into: &packet) {
 
 ## Examples
 
-See `Examples/README.md` for more usage patterns (decoding, scaling, filtering, and encoding).
+Runnable examples live in `Examples/`:
+
+```bash
+swift run example-inspect
+swift run example-decode
+swift run example-filter
+swift run example-encode
+```
+
+See `Examples/README.md` for arguments and details.
 
 ### Video Scaling
 
