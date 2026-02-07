@@ -16,7 +16,7 @@ let cffmpegTarget: Target = {
 
     return .binaryTarget(
         name: "CFFmpeg",
-        url: "https://github.com/wendylabsinc/ffmpeg-swift/releases/download/0.0.2/CFFmpeg.artifactbundle.zip",
+        url: "https://github.com/wendylabsinc/ffmpeg-swift/releases/download/0.0.3/CFFmpeg.artifactbundle.zip",
         checksum: "d69502cc3ed5b097e4a573bdd719e8e74d88292d0d97e397f8fc0ab002dc3fc7"
     )
 }()
