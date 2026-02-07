@@ -1,5 +1,13 @@
 # ffmpeg-swift
 
+[![Swift 6.2](https://img.shields.io/badge/Swift-6.2-orange.svg)](https://swift.org)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%20|%20Linux%20|%20Windows%20|%20Android-blue.svg)](https://swift.org)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![macOS](https://img.shields.io/github/actions/workflow/status/wendylabsinc/ffmpeg-swift/ci.yml?branch=main&label=macOS)](https://github.com/wendylabsinc/ffmpeg-swift/actions/workflows/ci.yml)
+[![Linux](https://img.shields.io/github/actions/workflow/status/wendylabsinc/ffmpeg-swift/ci.yml?branch=main&label=Linux)](https://github.com/wendylabsinc/ffmpeg-swift/actions/workflows/ci.yml)
+[![Windows](https://img.shields.io/github/actions/workflow/status/wendylabsinc/ffmpeg-swift/ci.yml?branch=main&label=Windows)](https://github.com/wendylabsinc/ffmpeg-swift/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/Documentation-DocC-blue)](https://swiftpackageindex.com/wendylabsinc/ffmpeg-swift/documentation)
+
 A type-safe, memory-safe Swift package that distributes FFmpeg 7.1 as pre-built static libraries via [SE-0482 artifact bundles](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0482-swiftpm-binary-target-static-lib.md). Any Swift project can `import FFmpeg` and use FFmpeg on macOS and Linux without installing FFmpeg system-wide.
 
 ## Platform Support
