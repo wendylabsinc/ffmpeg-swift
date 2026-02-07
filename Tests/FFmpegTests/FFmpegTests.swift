@@ -164,7 +164,8 @@ struct CodecDiscoveryTests {
     @Test("Find H264 decoder by name")
     func findH264Decoder() throws {
         let codec = try Codec.findDecoder(name: "h264")
-        #expect(codec.pointee.name != nil)
+        let ctx = try CodecContext(codec: codec)
+        #expect(ctx.codecType == .video)
     }
 
     @Test("Find decoder not found throws")
