@@ -25,7 +25,7 @@ public final class MediaWriter: @unchecked Sendable {
     /// Adds a video stream with the given codec and parameters.
     ///
     /// - Parameters:
-    ///   - codecID: The codec ID (e.g. `AV_CODEC_ID_H264`).
+    ///   - codecID: The codec ID (e.g. `.h264`).
     ///   - width: Video width.
     ///   - height: Video height.
     ///   - pixelFormat: Pixel format.
@@ -36,10 +36,10 @@ public final class MediaWriter: @unchecked Sendable {
     /// - Returns: The configured encoder context.
     @discardableResult
     public func addVideoStream(
-        codecID: AVCodecID,
+        codecID: CodecID,
         width: Int32,
         height: Int32,
-        pixelFormat: AVPixelFormat,
+        pixelFormat: PixelFormat,
         timeBase: Rational,
         bitRate: Int64 = 0,
         gopSize: Int32 = 12,
@@ -62,10 +62,10 @@ public final class MediaWriter: @unchecked Sendable {
         }
 
         try ctx.open()
-        try ctx.copyParameters(to: stream.pointee.codecpar)
-        stream.pointee.time_base = timeBase.avRational
+        try ctx.copyParameters(to: stream.pointer.pointee.codecpar)
+        stream.pointer.pointee.time_base = timeBase.avRational
 
-        videoStreamIndex = Int32(stream.pointee.index)
+        videoStreamIndex = Int32(stream.pointer.pointee.index)
         videoEncoderContext = ctx
         return ctx
     }
@@ -73,10 +73,10 @@ public final class MediaWriter: @unchecked Sendable {
     /// Adds an audio stream with the given codec and parameters.
     @discardableResult
     public func addAudioStream(
-        codecID: AVCodecID,
+        codecID: CodecID,
         sampleRate: Int32,
-        sampleFormat: AVSampleFormat,
-        channelLayout: AVChannelLayout,
+        sampleFormat: SampleFormat,
+        channelLayout: ChannelLayout,
         timeBase: Rational,
         bitRate: Int64 = 0
     ) throws -> CodecContext {
@@ -95,10 +95,10 @@ public final class MediaWriter: @unchecked Sendable {
         }
 
         try ctx.open()
-        try ctx.copyParameters(to: stream.pointee.codecpar)
-        stream.pointee.time_base = timeBase.avRational
+        try ctx.copyParameters(to: stream.pointer.pointee.codecpar)
+        stream.pointer.pointee.time_base = timeBase.avRational
 
-        audioStreamIndex = Int32(stream.pointee.index)
+        audioStreamIndex = Int32(stream.pointer.pointee.index)
         audioEncoderContext = ctx
         return ctx
     }

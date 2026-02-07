@@ -41,14 +41,14 @@ public struct Frame: ~Copyable {
     }
 
     /// Pixel format for video.
-    public var pixelFormat: AVPixelFormat {
-        get { AVPixelFormat(rawValue: pointer.pointee.format) }
+    public var pixelFormat: PixelFormat {
+        get { PixelFormat(rawValue: pointer.pointee.format) }
         set { pointer.pointee.format = newValue.rawValue }
     }
 
     /// Sample format for audio.
-    public var sampleFormat: AVSampleFormat {
-        get { AVSampleFormat(rawValue: pointer.pointee.format) }
+    public var sampleFormat: SampleFormat {
+        get { SampleFormat(rawValue: pointer.pointee.format) }
         set { pointer.pointee.format = newValue.rawValue }
     }
 

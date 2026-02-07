@@ -1,6 +1,5 @@
 import Foundation
 import FFmpeg
-import CFFmpegShim
 
 let args = Array(CommandLine.arguments.dropFirst())
 let inputPath = args.first ?? "Examples/file_example_MP4_1280_10MG.mp4"
@@ -34,7 +33,7 @@ do {
         if writer == nil {
             let w = try MediaWriter(url: outputPath, formatName: "mp4")
             try w.addVideoStream(
-                codecID: AV_CODEC_ID_H264,
+                codecID: .h264,
                 width: frame.width,
                 height: frame.height,
                 pixelFormat: frame.pixelFormat,

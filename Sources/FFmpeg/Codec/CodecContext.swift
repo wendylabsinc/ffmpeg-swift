@@ -16,8 +16,8 @@ public final class CodecContext: @unchecked Sendable {
     public let pointer: UnsafeMutablePointer<AVCodecContext>
 
     /// Allocates a codec context for the given codec.
-    public init(codec: UnsafePointer<AVCodec>) throws {
-        guard let ctx = avcodec_alloc_context3(codec) else {
+    public init(codec: CodecRef) throws {
+        guard let ctx = avcodec_alloc_context3(codec.pointer) else {
             throw FFmpegError.noMemory
         }
         self.pointer = ctx
@@ -61,15 +61,15 @@ public final class CodecContext: @unchecked Sendable {
     }
 
     /// Pixel format for video.
-    public var pixelFormat: AVPixelFormat {
-        get { pointer.pointee.pix_fmt }
-        set { pointer.pointee.pix_fmt = newValue }
+    public var pixelFormat: PixelFormat {
+        get { PixelFormat(rawValue: pointer.pointee.pix_fmt.rawValue) }
+        set { pointer.pointee.pix_fmt = newValue.avValue }
     }
 
     /// Sample format for audio.
-    public var sampleFormat: AVSampleFormat {
-        get { pointer.pointee.sample_fmt }
-        set { pointer.pointee.sample_fmt = newValue }
+    public var sampleFormat: SampleFormat {
+        get { SampleFormat(rawValue: pointer.pointee.sample_fmt.rawValue) }
+        set { pointer.pointee.sample_fmt = newValue.avValue }
     }
 
     /// Audio sample rate in Hz.
@@ -115,14 +115,14 @@ public final class CodecContext: @unchecked Sendable {
     }
 
     /// Media type of the codec.
-    public var codecType: AVMediaType {
-        pointer.pointee.codec_type
+    public var codecType: MediaType {
+        MediaType(rawValue: pointer.pointee.codec_type.rawValue)
     }
 
     /// Audio channel layout.
-    public var channelLayout: AVChannelLayout {
-        get { pointer.pointee.ch_layout }
-        set { pointer.pointee.ch_layout = newValue }
+    public var channelLayout: ChannelLayout {
+        get { ChannelLayout(pointer.pointee.ch_layout) }
+        set { pointer.pointee.ch_layout = newValue.avValue }
     }
 
     // MARK: - Decode

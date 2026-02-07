@@ -14,22 +14,22 @@ public struct AudioResampler: ~Copyable {
     ///   - dstSampleRate: Destination sample rate in Hz.
     ///   - dstFormat: Destination sample format.
     public init(
-        srcChannelLayout: AVChannelLayout,
+        srcChannelLayout: ChannelLayout,
         srcSampleRate: Int32,
-        srcFormat: AVSampleFormat,
-        dstChannelLayout: AVChannelLayout,
+        srcFormat: SampleFormat,
+        dstChannelLayout: ChannelLayout,
         dstSampleRate: Int32,
-        dstFormat: AVSampleFormat
+        dstFormat: SampleFormat
     ) throws {
         var ctx: OpaquePointer? = nil
-        var srcLayout = srcChannelLayout
-        var dstLayout = dstChannelLayout
+        var srcLayout = srcChannelLayout.avValue
+        var dstLayout = dstChannelLayout.avValue
 
         // swr_alloc_set_opts2 expects UnsafeMutablePointer<OpaquePointer?> for the first arg
         let ret = swr_alloc_set_opts2(
             &ctx,
-            &dstLayout, dstFormat, dstSampleRate,
-            &srcLayout, srcFormat, srcSampleRate,
+            &dstLayout, dstFormat.avValue, dstSampleRate,
+            &srcLayout, srcFormat.avValue, srcSampleRate,
             0, nil
         )
         try ffCheck(ret)

@@ -29,13 +29,13 @@ public final class OwnedFrame: @unchecked Sendable {
     public var duration: Int64 { pointer.pointee.duration }
 
     /// Pixel format for video.
-    public var pixelFormat: AVPixelFormat {
-        AVPixelFormat(rawValue: pointer.pointee.format)
+    public var pixelFormat: PixelFormat {
+        PixelFormat(rawValue: pointer.pointee.format)
     }
 
     /// Sample format for audio.
-    public var sampleFormat: AVSampleFormat {
-        AVSampleFormat(rawValue: pointer.pointee.format)
+    public var sampleFormat: SampleFormat {
+        SampleFormat(rawValue: pointer.pointee.format)
     }
 
     /// Audio sample rate in Hz.
@@ -75,7 +75,7 @@ public final class MediaReader: @unchecked Sendable {
         self.formatContext = try FormatContext.openInput(url: url)
 
         // Try to find and set up video decoder
-        if let videoIdx = try? formatContext.findBestStream(type: AVMEDIA_TYPE_VIDEO) {
+        if let videoIdx = try? formatContext.findBestStream(type: .video) {
             self.videoStreamIndex = videoIdx
             let stream = formatContext.stream(at: Int(videoIdx))
             let codec = try Codec.findDecoder(id: stream.codecID)
@@ -87,7 +87,7 @@ public final class MediaReader: @unchecked Sendable {
         }
 
         // Try to find and set up audio decoder
-        if let audioIdx = try? formatContext.findBestStream(type: AVMEDIA_TYPE_AUDIO) {
+        if let audioIdx = try? formatContext.findBestStream(type: .audio) {
             self.audioStreamIndex = audioIdx
             let stream = formatContext.stream(at: Int(audioIdx))
             let codec = try Codec.findDecoder(id: stream.codecID)

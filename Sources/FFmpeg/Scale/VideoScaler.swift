@@ -15,13 +15,13 @@ public struct VideoScaler: ~Copyable {
     ///   - dstFormat: Destination pixel format.
     ///   - flags: Scaling algorithm (default: bilinear).
     public init(
-        srcWidth: Int32, srcHeight: Int32, srcFormat: AVPixelFormat,
-        dstWidth: Int32, dstHeight: Int32, dstFormat: AVPixelFormat,
+        srcWidth: Int32, srcHeight: Int32, srcFormat: PixelFormat,
+        dstWidth: Int32, dstHeight: Int32, dstFormat: PixelFormat,
         flags: Int32 = SWS_BILINEAR
     ) throws {
         guard let ctx = sws_getContext(
-            srcWidth, srcHeight, srcFormat,
-            dstWidth, dstHeight, dstFormat,
+            srcWidth, srcHeight, srcFormat.avValue,
+            dstWidth, dstHeight, dstFormat.avValue,
             flags, nil, nil, nil
         ) else {
             throw FFmpegError.unknown

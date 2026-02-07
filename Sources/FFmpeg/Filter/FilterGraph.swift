@@ -35,7 +35,7 @@ public final class FilterGraph: @unchecked Sendable {
         filterDescription: String,
         width: Int32,
         height: Int32,
-        pixelFormat: AVPixelFormat,
+        pixelFormat: PixelFormat,
         timeBase: Rational
     ) throws {
         guard let bufferSrc = avfilter_get_by_name("buffer") else {
@@ -88,7 +88,7 @@ public final class FilterGraph: @unchecked Sendable {
     public func configureAudio(
         filterDescription: String,
         sampleRate: Int32,
-        sampleFormat: AVSampleFormat,
+        sampleFormat: SampleFormat,
         channelLayout: String,
         timeBase: Rational
     ) throws {
@@ -99,7 +99,7 @@ public final class FilterGraph: @unchecked Sendable {
             throw FFmpegError.filterNotFound
         }
 
-        let args = "sample_rate=\(sampleRate):sample_fmt=\(String(cString: av_get_sample_fmt_name(sampleFormat))):channel_layout=\(channelLayout):time_base=\(timeBase.numerator)/\(timeBase.denominator)"
+        let args = "sample_rate=\(sampleRate):sample_fmt=\(String(cString: av_get_sample_fmt_name(sampleFormat.avValue))):channel_layout=\(channelLayout):time_base=\(timeBase.numerator)/\(timeBase.denominator)"
 
         var srcCtx: UnsafeMutablePointer<AVFilterContext>? = nil
         try ffCheck(avfilter_graph_create_filter(&srcCtx, bufferSrc, "in", args, nil, graph))

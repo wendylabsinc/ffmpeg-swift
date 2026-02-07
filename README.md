@@ -93,13 +93,10 @@ for try await frame in reader.videoFrames() {
 
 ```swift
 let fmt = try FormatContext.openInput(url: "input.mp4")
-let videoIdx = try fmt.findBestStream(type: AVMEDIA_TYPE_VIDEO)
+let videoIdx = try fmt.findBestStream(type: .video)
 let stream = fmt.stream(at: Int(videoIdx))
 
-let codec = try Codec.findDecoder(id: stream.codecID)
-let ctx = try CodecContext(codec: codec)
-try ctx.setParameters(from: stream.codecParameters)
-try ctx.open()
+let ctx = try stream.makeDecoderContext()
 
 var packet = Packet()
 var frame = Frame()
@@ -136,14 +133,14 @@ See `Examples/README.md` for arguments and details.
 
 ```swift
 let scaler = try VideoScaler(
-    srcWidth: 1920, srcHeight: 1080, srcFormat: AV_PIX_FMT_YUV420P,
-    dstWidth: 640, dstHeight: 360, dstFormat: AV_PIX_FMT_RGB24
+    srcWidth: 1920, srcHeight: 1080, srcFormat: .yuv420p,
+    dstWidth: 640, dstHeight: 360, dstFormat: .rgb24
 )
 
 var dst = Frame()
 dst.width = 640
 dst.height = 360
-dst.pixelFormat = AV_PIX_FMT_RGB24
+dst.pixelFormat = .rgb24
 try dst.allocateBuffers()
 
 try scaler.scale(source: srcFrame, into: &dst)
@@ -156,7 +153,7 @@ let graph = try FilterGraph()
 try graph.configureVideo(
     filterDescription: "scale=320:240,hflip",
     width: 1920, height: 1080,
-    pixelFormat: AV_PIX_FMT_YUV420P,
+    pixelFormat: .yuv420p,
     timeBase: Rational(numerator: 1, denominator: 30)
 )
 

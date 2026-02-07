@@ -65,8 +65,8 @@ public final class FormatContext: @unchecked Sendable {
     }
 
     /// Finds the "best" stream of the given media type.
-    public func findBestStream(type: AVMediaType) throws -> Int32 {
-        let index = av_find_best_stream(pointer, type, -1, -1, nil, 0)
+    public func findBestStream(type: MediaType) throws -> Int32 {
+        let index = av_find_best_stream(pointer, type.avValue, -1, -1, nil, 0)
         try ffCheck(index)
         return index
     }
@@ -106,11 +106,11 @@ public final class FormatContext: @unchecked Sendable {
 
     /// Adds a new stream to the output context.
     @discardableResult
-    public func addStream(codec: UnsafePointer<AVCodec>? = nil) throws -> UnsafeMutablePointer<AVStream> {
-        guard let stream = avformat_new_stream(pointer, codec) else {
+    public func addStream(codec: CodecRef? = nil) throws -> StreamHandle {
+        guard let stream = avformat_new_stream(pointer, codec?.pointer) else {
             throw FFmpegError.unknown
         }
-        return stream
+        return StreamHandle(stream)
     }
 
     /// Opens the output file for writing (call after configuring streams).
