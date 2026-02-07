@@ -43,6 +43,19 @@ Then add `"FFmpeg"` as a dependency of your target:
 ])
 ```
 
+## Local Development
+
+Build a host-architecture artifact bundle and tell SwiftPM to use it locally:
+
+```bash
+./Scripts/build-ffmpeg.sh
+FFMPEG_SWIFT_USE_LOCAL_ARTIFACT=1 swift build
+```
+
+Notes:
+- The local bundle is expected at `CFFmpeg.artifactbundle/` in the repo root.
+- Remove `FFMPEG_SWIFT_USE_LOCAL_ARTIFACT` to use the published artifact bundle again.
+
 ## Architecture
 
 ```
@@ -126,6 +139,7 @@ swift run example-decode
 swift run example-filter
 swift run example-encode
 swift run example-adts
+swift run example-mp3
 ```
 
 See `Examples/README.md` for arguments and details.

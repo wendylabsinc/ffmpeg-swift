@@ -58,6 +58,12 @@ public struct Frame: ~Copyable {
         set { pointer.pointee.sample_rate = newValue }
     }
 
+    /// Audio channel layout.
+    public var channelLayout: ChannelLayout {
+        get { ChannelLayout(pointer.pointee.ch_layout) }
+        set { pointer.pointee.ch_layout = newValue.avValue }
+    }
+
     /// Number of audio samples per channel.
     public var numberOfSamples: Int32 {
         get { pointer.pointee.nb_samples }

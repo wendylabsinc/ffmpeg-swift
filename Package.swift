@@ -1,5 +1,25 @@
 // swift-tools-version: 6.2
+import Foundation
 import PackageDescription
+
+let localArtifactPath = "CFFmpeg.artifactbundle"
+let useLocalArtifact = ProcessInfo.processInfo.environment["FFMPEG_SWIFT_USE_LOCAL_ARTIFACT"] == "1"
+let hasLocalArtifact = FileManager.default.fileExists(atPath: localArtifactPath)
+
+let cffmpegTarget: Target = {
+    if useLocalArtifact && hasLocalArtifact {
+        return .binaryTarget(
+            name: "CFFmpeg",
+            path: localArtifactPath
+        )
+    }
+
+    return .binaryTarget(
+        name: "CFFmpeg",
+        url: "https://github.com/wendylabsinc/ffmpeg-swift/releases/download/0.0.2/CFFmpeg.artifactbundle.zip",
+        checksum: "d69502cc3ed5b097e4a573bdd719e8e74d88292d0d97e397f8fc0ab002dc3fc7"
+    )
+}()
 
 let package = Package(
     name: "ffmpeg-swift",
@@ -11,13 +31,10 @@ let package = Package(
         .executable(name: "example-filter", targets: ["ExampleFilter"]),
         .executable(name: "example-encode", targets: ["ExampleEncode"]),
         .executable(name: "example-adts", targets: ["ExampleADTS"]),
+        .executable(name: "example-mp3", targets: ["ExampleMP3"]),
     ],
     targets: [
-        .binaryTarget(
-            name: "CFFmpeg",
-            url: "https://github.com/wendylabsinc/ffmpeg-swift/releases/download/0.0.2/CFFmpeg.artifactbundle.zip",
-            checksum: "02b8764e2488eff13e4ba9d8fbbad2bc5f01d6abf941df783b501662dfdf6665"
-        ),
+        cffmpegTarget,
         .target(
             name: "CFFmpegShim",
             dependencies: ["CFFmpeg"],
@@ -42,13 +59,18 @@ let package = Package(
         ),
         .executableTarget(
             name: "ExampleEncode",
-            dependencies: ["FFmpeg", "CFFmpegShim"],
+            dependencies: ["FFmpeg"],
             path: "Examples/Encode"
         ),
         .executableTarget(
             name: "ExampleADTS",
             dependencies: ["FFmpeg"],
             path: "Examples/ADTS"
+        ),
+        .executableTarget(
+            name: "ExampleMP3",
+            dependencies: ["FFmpeg"],
+            path: "Examples/MP3"
         ),
         .testTarget(name: "FFmpegTests", dependencies: ["FFmpeg"]),
     ]

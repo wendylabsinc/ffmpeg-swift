@@ -40,6 +40,10 @@ public final class OwnedFrame: @unchecked Sendable {
 
     /// Audio sample rate in Hz.
     public var sampleRate: Int32 { pointer.pointee.sample_rate }
+    /// Audio channel layout.
+    public var channelLayout: ChannelLayout {
+        ChannelLayout(pointer.pointee.ch_layout)
+    }
     /// Number of audio samples per channel.
     public var numberOfSamples: Int32 { pointer.pointee.nb_samples }
 

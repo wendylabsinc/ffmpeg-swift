@@ -22,6 +22,7 @@ BUILD_DIR="$ROOT_DIR/.build/ffmpeg-build"
 BUNDLE_DIR="$ROOT_DIR/CFFmpeg.artifactbundle"
 
 FFMPEG_VERSION="7.1"
+LAME_VERSION="3.100"
 PLATFORMS=""
 DO_ZIP=false
 
@@ -60,6 +61,7 @@ fi
 IFS=',' read -ra PLATFORM_ARRAY <<< "$PLATFORMS"
 
 FFMPEG_LIBS=(libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc)
+EXTRA_STATIC_LIBS=(libmp3lame)
 
 # ---------- Helpers ----------
 
@@ -80,6 +82,41 @@ download_ffmpeg() {
     tar xf "$BUILD_DIR/$tarball" -C "$BUILD_DIR"
 }
 
+download_lame() {
+    local tarball="lame-${LAME_VERSION}.tar.gz"
+    local url="https://downloads.sourceforge.net/project/lame/lame/${LAME_VERSION}/${tarball}"
+    local src_dir="$BUILD_DIR/lame-${LAME_VERSION}"
+
+    if [[ -d "$src_dir" ]]; then
+        echo "==> LAME source already exists at $src_dir"
+        return
+    fi
+
+    mkdir -p "$BUILD_DIR"
+    echo "==> Downloading LAME ${LAME_VERSION} ..."
+    curl -L -o "$BUILD_DIR/$tarball" "$url"
+    echo "==> Extracting ..."
+    tar xf "$BUILD_DIR/$tarball" -C "$BUILD_DIR"
+}
+
+write_lame_pkgconfig() {
+    local prefix="$1"
+    local pc_dir="$prefix/lib/pkgconfig"
+    mkdir -p "$pc_dir"
+    cat > "$pc_dir/libmp3lame.pc" <<EOF
+prefix=$prefix
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: libmp3lame
+Description: LAME MP3 encoder
+Version: ${LAME_VERSION}
+Libs: -L\${libdir} -lmp3lame
+Cflags: -I\${includedir}
+EOF
+}
+
 common_configure_flags() {
     echo "\
         --enable-static \
@@ -91,6 +128,8 @@ common_configure_flags() {
         --disable-debug \
         --enable-gpl \
         --enable-version3 \
+        --enable-libmp3lame \
+        --pkg-config-flags=--static \
         --disable-network \
         --disable-iconv \
         --disable-securetransport \
@@ -108,6 +147,158 @@ common_configure_flags() {
         --disable-nvdec"
 }
 
+build_lame_macos() {
+    local arch="$1"  # arm64 or x86_64
+    local platform_tag="macos-${arch}"
+    local src_dir="$BUILD_DIR/lame-${LAME_VERSION}"
+    local build_prefix="$BUILD_DIR/install-${platform_tag}"
+    local build_work="$BUILD_DIR/build-${platform_tag}-lame"
+
+    if [[ -f "$build_prefix/lib/libmp3lame.a" ]]; then
+        echo "==> $platform_tag libmp3lame already built, skipping"
+        return
+    fi
+
+    echo "==> Building LAME for $platform_tag ..."
+    mkdir -p "$build_work"
+
+    local host="x86_64-apple-darwin"
+    if [[ "$arch" == "arm64" ]]; then
+        host="aarch64-apple-darwin"
+    fi
+
+    cd "$build_work"
+    CC="clang -arch $arch" \
+    CFLAGS="-arch $arch -mmacosx-version-min=14.0 -fPIC" \
+    LDFLAGS="-arch $arch -mmacosx-version-min=14.0" \
+    "$src_dir/configure" \
+        --prefix="$build_prefix" \
+        --disable-shared \
+        --enable-static \
+        --disable-frontend \
+        --host="$host"
+
+    make -j"$(sysctl -n hw.ncpu)"
+    make install
+    write_lame_pkgconfig "$build_prefix"
+    cd "$ROOT_DIR"
+}
+
+build_lame_linux_native() {
+    local arch="$1"  # x86_64 or aarch64
+    local platform_tag="linux-${arch}"
+    local src_dir="$BUILD_DIR/lame-${LAME_VERSION}"
+    local build_prefix="$BUILD_DIR/install-${platform_tag}"
+    local build_work="$BUILD_DIR/build-${platform_tag}-lame"
+
+    if [[ -f "$build_prefix/lib/libmp3lame.a" ]]; then
+        echo "==> $platform_tag libmp3lame already built, skipping"
+        return
+    fi
+
+    echo "==> Building LAME for $platform_tag ..."
+    mkdir -p "$build_work"
+
+    local host="x86_64-linux-gnu"
+    if [[ "$arch" == "aarch64" ]]; then
+        host="aarch64-linux-gnu"
+    fi
+
+    cd "$build_work"
+    CFLAGS="-fPIC" \
+    "$src_dir/configure" \
+        --prefix="$build_prefix" \
+        --disable-shared \
+        --enable-static \
+        --disable-frontend \
+        --host="$host"
+
+    local jobs="1"
+    if command -v nproc >/dev/null 2>&1; then
+        jobs="$(nproc)"
+    else
+        jobs="$(sysctl -n hw.ncpu)"
+    fi
+    make -j"$jobs"
+    make install
+    write_lame_pkgconfig "$build_prefix"
+    cd "$ROOT_DIR"
+}
+
+build_lame_android_arm64() {
+    local platform_tag="android-arm64"
+    local src_dir="$BUILD_DIR/lame-${LAME_VERSION}"
+    local build_prefix="$BUILD_DIR/install-${platform_tag}"
+    local build_work="$BUILD_DIR/build-${platform_tag}-lame"
+
+    if [[ -f "$build_prefix/lib/libmp3lame.a" ]]; then
+        echo "==> $platform_tag libmp3lame already built, skipping"
+        return
+    fi
+
+    if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
+        if [[ -n "${ANDROID_SDK_ROOT:-}" && -d "${ANDROID_SDK_ROOT}/ndk" ]]; then
+            ANDROID_NDK_HOME="$(ls -d "${ANDROID_SDK_ROOT}"/ndk/* | sort -V | tail -n1)"
+        else
+            echo "ANDROID_NDK_HOME not set. Please set it to your NDK path."
+            exit 1
+        fi
+    fi
+
+    local host_os="$(uname -s)"
+    local host_arch="$(uname -m)"
+    local prebuilt="linux-x86_64"
+    if [[ "$host_os" == "Darwin" ]]; then
+        if [[ "$host_arch" == "arm64" ]]; then
+            prebuilt="darwin-arm64"
+        else
+            prebuilt="darwin-x86_64"
+        fi
+    fi
+    if [[ ! -d "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${prebuilt}" && -d "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/darwin-x86_64" ]]; then
+        prebuilt="darwin-x86_64"
+    fi
+
+    local toolchain="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${prebuilt}"
+    if [[ ! -d "$toolchain" ]]; then
+        echo "NDK toolchain not found: $toolchain"
+        exit 1
+    fi
+
+    local api_level="${ANDROID_API_LEVEL:-21}"
+    local sysroot="${toolchain}/sysroot"
+    local cc="${toolchain}/bin/aarch64-linux-android${api_level}-clang"
+    local ar="${toolchain}/bin/llvm-ar"
+    local ranlib="${toolchain}/bin/llvm-ranlib"
+
+    echo "==> Building LAME for $platform_tag ..."
+    mkdir -p "$build_work"
+
+    cd "$build_work"
+    CC="$cc" \
+    AR="$ar" \
+    RANLIB="$ranlib" \
+    CFLAGS="--sysroot=${sysroot} -fPIC" \
+    LDFLAGS="--sysroot=${sysroot}" \
+    "$src_dir/configure" \
+        --prefix="$build_prefix" \
+        --disable-shared \
+        --enable-static \
+        --disable-frontend \
+        --host="aarch64-linux-android"
+
+    local jobs="1"
+    if command -v nproc >/dev/null 2>&1; then
+        jobs="$(nproc)"
+    else
+        jobs="$(sysctl -n hw.ncpu)"
+    fi
+    make -j"$jobs"
+    make install
+    write_lame_pkgconfig "$build_prefix"
+    cd "$ROOT_DIR"
+}
+
 build_macos() {
     local arch="$1"  # arm64 or x86_64
     local platform_tag="macos-${arch}"
@@ -122,10 +313,13 @@ build_macos() {
 
     echo "==> Building FFmpeg for $platform_tag ..."
     mkdir -p "$build_work"
+    build_lame_macos "$arch"
 
     local extra_flags=""
     if [[ "$arch" == "arm64" ]]; then
         extra_flags="--enable-neon"
+    else
+        extra_flags="--disable-x86asm"
     fi
 
     # macOS: enable VideoToolbox + CoreMedia + AudioToolbox
@@ -134,13 +328,14 @@ build_macos() {
         --enable-audiotoolbox"
 
     cd "$build_work"
+    PKG_CONFIG_PATH="$build_prefix/lib/pkgconfig" \
     "$src_dir/configure" \
         --prefix="$build_prefix" \
         --arch="$arch" \
         --target-os=darwin \
         --cc="clang -arch $arch" \
-        --extra-cflags="-arch $arch -mmacosx-version-min=14.0" \
-        --extra-ldflags="-arch $arch -mmacosx-version-min=14.0" \
+        --extra-cflags="-arch $arch -mmacosx-version-min=14.0 -I${build_prefix}/include" \
+        --extra-ldflags="-arch $arch -mmacosx-version-min=14.0 -L${build_prefix}/lib" \
         $(common_configure_flags) \
         $macos_flags \
         $extra_flags
@@ -164,6 +359,7 @@ build_linux_native() {
 
     echo "==> Building FFmpeg for $platform_tag (native) ..."
     mkdir -p "$build_work"
+    build_lame_linux_native "$arch"
 
     local extra_flags=""
     if [[ "$arch" == "aarch64" ]]; then
@@ -171,10 +367,13 @@ build_linux_native() {
     fi
 
     cd "$build_work"
+    PKG_CONFIG_PATH="$build_prefix/lib/pkgconfig" \
     "$src_dir/configure" \
         --prefix="$build_prefix" \
         --arch="$arch" \
         --target-os=linux \
+        --extra-cflags="-I${build_prefix}/include" \
+        --extra-ldflags="-L${build_prefix}/lib" \
         $(common_configure_flags) \
         $extra_flags
 
@@ -207,10 +406,35 @@ build_linux_docker() {
 FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y build-essential yasm nasm pkg-config curl xz-utils
 ARG FFMPEG_VERSION=7.1
+ARG LAME_VERSION=3.100
 ARG TARGET_ARCH=x86_64
 WORKDIR /build
 RUN curl -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" | tar xJ
+RUN curl -L "https://downloads.sourceforge.net/project/lame/lame/${LAME_VERSION}/lame-${LAME_VERSION}.tar.gz" | tar xz
+WORKDIR /build/lame-${LAME_VERSION}
+RUN ./configure \
+    --prefix=/install \
+    --disable-shared \
+    --enable-static \
+    --disable-frontend \
+    --host=${TARGET_ARCH}-linux-gnu && \
+    make -j$(nproc) && \
+    make install && \
+    mkdir -p /install/lib/pkgconfig && \
+    cat > /install/lib/pkgconfig/libmp3lame.pc <<EOF
+prefix=/install
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: libmp3lame
+Description: LAME MP3 encoder
+Version: ${LAME_VERSION}
+Libs: -L\${libdir} -lmp3lame
+Cflags: -I\${includedir}
+EOF
 WORKDIR /build/ffmpeg-${FFMPEG_VERSION}
+ENV PKG_CONFIG_PATH=/install/lib/pkgconfig
 RUN ./configure \
     --prefix=/install \
     --arch=${TARGET_ARCH} \
@@ -224,6 +448,10 @@ RUN ./configure \
     --disable-debug \
     --enable-gpl \
     --enable-version3 \
+    --enable-libmp3lame \
+    --pkg-config-flags=--static \
+    --extra-cflags=-I/install/include \
+    --extra-ldflags=-L/install/lib \
     --disable-network \
     --disable-iconv \
     --disable-xlib \
@@ -245,6 +473,7 @@ DOCKERFILE
     docker build \
         --platform "$docker_platform" \
         --build-arg "FFMPEG_VERSION=$FFMPEG_VERSION" \
+        --build-arg "LAME_VERSION=$LAME_VERSION" \
         --build-arg "TARGET_ARCH=$arch" \
         -t "ffmpeg-build-${platform_tag}" \
         -f "$dockerfile" \
@@ -287,6 +516,9 @@ build_android_arm64() {
             prebuilt="darwin-x86_64"
         fi
     fi
+    if [[ ! -d "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${prebuilt}" && -d "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/darwin-x86_64" ]]; then
+        prebuilt="darwin-x86_64"
+    fi
 
     local toolchain="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${prebuilt}"
     if [[ ! -d "$toolchain" ]]; then
@@ -304,9 +536,11 @@ build_android_arm64() {
 
     echo "==> Building FFmpeg for $platform_tag ..."
     mkdir -p "$build_work"
+    build_lame_android_arm64
 
     cd "$build_work"
     PATH="${toolchain}/bin:${PATH}" \
+    PKG_CONFIG_PATH="$build_prefix/lib/pkgconfig" \
     "$src_dir/configure" \
         --prefix="$build_prefix" \
         --arch=aarch64 \
@@ -318,8 +552,8 @@ build_android_arm64() {
         --ranlib="$ranlib" \
         --strip="$strip" \
         --sysroot="$sysroot" \
-        --extra-cflags="--sysroot=${sysroot} -fPIC" \
-        --extra-ldflags="--sysroot=${sysroot}" \
+        --extra-cflags="--sysroot=${sysroot} -fPIC -I${build_prefix}/include" \
+        --extra-ldflags="--sysroot=${sysroot} -L${build_prefix}/lib" \
         $(common_configure_flags) \
         --enable-neon
 
@@ -346,6 +580,13 @@ merge_static_libs() {
         fi
     done
 
+    for lib in "${EXTRA_STATIC_LIBS[@]}"; do
+        local lib_file="$build_prefix/lib/${lib}.a"
+        if [[ -f "$lib_file" ]]; then
+            lib_paths+=("$lib_file")
+        fi
+    done
+
     if [[ "${#lib_paths[@]}" -eq 0 ]]; then
         echo "ERROR: No libraries found for $platform_tag"
         exit 1
@@ -353,10 +594,12 @@ merge_static_libs() {
 
     echo "==> Merging ${#lib_paths[@]} libraries into $merged_lib ..."
 
-    if [[ "$(uname -s)" == "Darwin" ]]; then
+    if [[ "$platform_tag" == macos-* ]]; then
         libtool -static -o "$merged_lib" "${lib_paths[@]}"
     else
-        # Use MRI script for ar on Linux
+        # Use MRI script with llvm-ar/gnu-ar for non-macOS archives (ELF/Android).
+        local ar_tool
+        ar_tool="$(xcrun --find llvm-ar 2>/dev/null || command -v llvm-ar || command -v ar)"
         local mri_script="$BUILD_DIR/merge-${platform_tag}.mri"
         echo "CREATE $merged_lib" > "$mri_script"
         for lib in "${lib_paths[@]}"; do
@@ -364,7 +607,7 @@ merge_static_libs() {
         done
         echo "SAVE" >> "$mri_script"
         echo "END" >> "$mri_script"
-        ar -M < "$mri_script"
+        "$ar_tool" -M < "$mri_script"
     fi
 }
 
@@ -526,6 +769,7 @@ echo "============================================"
 echo ""
 
 download_ffmpeg
+download_lame
 
 for platform_tag in "${PLATFORM_ARRAY[@]}"; do
     case "$platform_tag" in
