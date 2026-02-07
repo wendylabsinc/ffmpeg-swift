@@ -174,6 +174,7 @@ public struct StreamHandle: @unchecked Sendable {
 
     /// Stream time base.
     public var timeBase: Rational {
-        Rational(pointer.pointee.time_base)
+        get { Rational(pointer.pointee.time_base) }
+        set { pointer.pointee.time_base = newValue.avRational }
     }
 }

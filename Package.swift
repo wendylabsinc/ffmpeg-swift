@@ -10,6 +10,7 @@ let package = Package(
         .executable(name: "example-decode", targets: ["ExampleDecode"]),
         .executable(name: "example-filter", targets: ["ExampleFilter"]),
         .executable(name: "example-encode", targets: ["ExampleEncode"]),
+        .executable(name: "example-adts", targets: ["ExampleADTS"]),
     ],
     targets: [
         .binaryTarget(
@@ -43,6 +44,11 @@ let package = Package(
             name: "ExampleEncode",
             dependencies: ["FFmpeg", "CFFmpegShim"],
             path: "Examples/Encode"
+        ),
+        .executableTarget(
+            name: "ExampleADTS",
+            dependencies: ["FFmpeg"],
+            path: "Examples/ADTS"
         ),
         .testTarget(name: "FFmpegTests", dependencies: ["FFmpeg"]),
     ]

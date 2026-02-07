@@ -66,4 +66,11 @@ public struct StreamInfo: @unchecked Sendable {
         try ctx.open()
         return ctx
     }
+
+    /// Copies codec parameters into an output stream (for remuxing).
+    public func copyCodecParameters(to stream: StreamHandle) throws {
+        try ffCheck(avcodec_parameters_copy(stream.pointer.pointee.codecpar, codecParameters))
+        stream.pointer.pointee.codecpar.pointee.codec_tag = 0
+        stream.pointer.pointee.time_base = timeBase.avRational
+    }
 }

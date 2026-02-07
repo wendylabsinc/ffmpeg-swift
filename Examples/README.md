@@ -35,6 +35,14 @@ swift run example-filter [input-path] [max-frames]
 swift run example-encode [input-path] [output-path] [max-frames]
 ```
 
+## 5) Remux AAC audio to ADTS
+
+```bash
+swift run example-adts [input-path] [output-path]
+```
+
 Notes:
 - The encode example assumes the H.264 encoder accepts the input pixel format. If it fails, you may need to add a conversion step.
 - Output defaults to `Examples/output.mp4`.
+- The ADTS example requires the input audio codec to be AAC.
+- Output defaults to `Examples/output.adts`.

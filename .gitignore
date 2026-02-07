@@ -12,3 +12,6 @@ CFFmpeg.artifactbundle.zip
 
 # FFmpeg source downloads
 ffmpeg-*/
+
+# Example outputs
+Examples/output.*

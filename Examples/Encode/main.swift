@@ -43,7 +43,30 @@ do {
             writer = w
         }
 
-        try writer?.writeVideoFrame(frame)
+        if frame.pixelFormat == .yuv420p {
+            try writer?.writeVideoFrame(frame)
+        } else {
+            var converted = Frame()
+            converted.width = frame.width
+            converted.height = frame.height
+            converted.pixelFormat = .yuv420p
+            converted.timeBase = frame.timeBase
+            try converted.allocateBuffers()
+
+            let scaler = try VideoScaler(
+                srcWidth: frame.width,
+                srcHeight: frame.height,
+                srcFormat: frame.pixelFormat,
+                dstWidth: converted.width,
+                dstHeight: converted.height,
+                dstFormat: converted.pixelFormat
+            )
+
+            try scaler.scale(source: frame, into: &converted)
+            try converted.copyProperties(from: frame)
+
+            try writer?.writeVideoFrame(converted)
+        }
         count += 1
         if count >= maxFrames { break }
     }

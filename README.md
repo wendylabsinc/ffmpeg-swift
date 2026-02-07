@@ -125,6 +125,7 @@ swift run example-inspect
 swift run example-decode
 swift run example-filter
 swift run example-encode
+swift run example-adts
 ```
 
 See `Examples/README.md` for arguments and details.
