@@ -131,7 +131,9 @@ public struct ChannelLayout: Sendable, CustomStringConvertible {
 
     public var description: String {
         var buffer = [CChar](repeating: 0, count: 128)
-        _ = av_channel_layout_describe(&layout, &buffer, buffer.count)
+        buffer.withUnsafeMutableBufferPointer { buf in
+            _ = av_channel_layout_describe(&layout, buf.baseAddress, buf.count)
+        }
         return String(cString: buffer)
     }
 
