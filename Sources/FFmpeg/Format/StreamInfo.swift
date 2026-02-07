@@ -2,15 +2,25 @@ import CFFmpegShim
 
 /// A read-only view of an `AVStream`'s metadata.
 public struct StreamInfo: @unchecked Sendable {
+    /// Stream index.
     public let index: Int32
+    /// Media type (video/audio/subtitle).
     public let mediaType: AVMediaType
+    /// Codec ID for the stream.
     public let codecID: AVCodecID
+    /// Underlying codec parameters pointer.
     public let codecParameters: UnsafeMutablePointer<AVCodecParameters>
+    /// Stream time base.
     public let timeBase: Rational
+    /// Stream duration in time base units.
     public let duration: Int64
+    /// Number of frames if known.
     public let numberOfFrames: Int64
+    /// Stream start time in time base units.
     public let startTime: Int64
+    /// Average frame rate.
     public let averageFrameRate: Rational
+    /// Real frame rate.
     public let realFrameRate: Rational
 
     init(stream: UnsafeMutablePointer<AVStream>) {

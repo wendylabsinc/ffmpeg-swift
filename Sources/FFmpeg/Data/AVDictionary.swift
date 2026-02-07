@@ -4,6 +4,7 @@ import CFFmpegShim
 public final class AVDictionaryWrapper: @unchecked Sendable {
     var pointer: OpaquePointer?
 
+    /// Creates an empty dictionary.
     public init() {
         self.pointer = nil
     }

@@ -2,6 +2,7 @@ import CFFmpegShim
 
 /// Wraps `AVFormatContext` for both demuxing (input) and muxing (output).
 public final class FormatContext: @unchecked Sendable {
+    /// The underlying `AVFormatContext` pointer.
     public let pointer: UnsafeMutablePointer<AVFormatContext>
     private let isOutput: Bool
 

@@ -5,6 +5,7 @@ import CFFmpegShim
 /// Since `Frame` is `~Copyable`, it cannot be used as the element type of `AsyncThrowingStream`.
 /// `OwnedFrame` provides a class-based wrapper that can be passed through async boundaries.
 public final class OwnedFrame: @unchecked Sendable {
+    /// The underlying `AVFrame` pointer.
     public let pointer: UnsafeMutablePointer<AVFrame>
 
     init(movingFrom frame: inout Frame) {
@@ -18,22 +19,31 @@ public final class OwnedFrame: @unchecked Sendable {
         av_frame_free(&p)
     }
 
+    /// Video width in pixels.
     public var width: Int32 { pointer.pointee.width }
+    /// Video height in pixels.
     public var height: Int32 { pointer.pointee.height }
+    /// Presentation timestamp.
     public var pts: Int64 { pointer.pointee.pts }
+    /// Frame duration in time base units.
     public var duration: Int64 { pointer.pointee.duration }
 
+    /// Pixel format for video.
     public var pixelFormat: AVPixelFormat {
         AVPixelFormat(rawValue: pointer.pointee.format)
     }
 
+    /// Sample format for audio.
     public var sampleFormat: AVSampleFormat {
         AVSampleFormat(rawValue: pointer.pointee.format)
     }
 
+    /// Audio sample rate in Hz.
     public var sampleRate: Int32 { pointer.pointee.sample_rate }
+    /// Number of audio samples per channel.
     public var numberOfSamples: Int32 { pointer.pointee.nb_samples }
 
+    /// Time base associated with `pts`/`duration`.
     public var timeBase: Rational {
         Rational(pointer.pointee.time_base)
     }
@@ -49,12 +59,15 @@ public final class OwnedFrame: @unchecked Sendable {
 
 /// High-level media file reader that provides decoded frames as `AsyncThrowingStream`.
 public final class MediaReader: @unchecked Sendable {
+    /// The underlying input format context.
     public let formatContext: FormatContext
 
     private var videoDecoderContext: CodecContext?
     private var audioDecoderContext: CodecContext?
 
+    /// Video stream index in the input, or `-1` if not present.
     public private(set) var videoStreamIndex: Int32 = -1
+    /// Audio stream index in the input, or `-1` if not present.
     public private(set) var audioStreamIndex: Int32 = -1
 
     /// Opens a media file and auto-discovers video/audio streams.

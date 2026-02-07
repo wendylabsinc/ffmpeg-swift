@@ -2,13 +2,16 @@ import CFFmpegShim
 
 /// High-level media file writer for encoding and muxing frames.
 public final class MediaWriter: @unchecked Sendable {
+    /// The underlying output format context.
     public let formatContext: FormatContext
     private let url: String
 
     private var videoEncoderContext: CodecContext?
     private var audioEncoderContext: CodecContext?
 
+    /// Video stream index in the output, or `-1` if not set.
     public private(set) var videoStreamIndex: Int32 = -1
+    /// Audio stream index in the output, or `-1` if not set.
     public private(set) var audioStreamIndex: Int32 = -1
 
     private var headerWritten = false
@@ -28,6 +31,8 @@ public final class MediaWriter: @unchecked Sendable {
     ///   - pixelFormat: Pixel format.
     ///   - timeBase: Time base for the stream.
     ///   - bitRate: Target bit rate.
+    ///   - gopSize: GOP size.
+    ///   - maxBFrames: Maximum number of B-frames.
     /// - Returns: The configured encoder context.
     @discardableResult
     public func addVideoStream(

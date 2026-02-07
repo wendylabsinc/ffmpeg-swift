@@ -7,6 +7,7 @@
 ///     tupleElement(tuplePtr, index: 0, as: UnsafeMutablePointer<UInt8>?.self)
 /// }
 /// ```
+/// Returns the element at `index` for a fixed-size C tuple.
 public func tupleElement<Tuple, Element>(
     _ tuple: UnsafePointer<Tuple>,
     index: Int,

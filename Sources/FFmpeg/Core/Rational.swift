@@ -2,19 +2,24 @@ import CFFmpegShim
 
 /// A Swift wrapper around FFmpeg's `AVRational` (numerator/denominator pair).
 public struct Rational: Sendable, Equatable, CustomStringConvertible {
+    /// The numerator component.
     public var numerator: Int32
+    /// The denominator component.
     public var denominator: Int32
 
+    /// Creates a rational from numerator and denominator.
     public init(numerator: Int32, denominator: Int32) {
         self.numerator = numerator
         self.denominator = denominator
     }
 
+    /// Creates a rational from an `AVRational`.
     public init(_ avRational: AVRational) {
         self.numerator = avRational.num
         self.denominator = avRational.den
     }
 
+    /// Converts to `AVRational`.
     public var avRational: AVRational {
         AVRational(num: numerator, den: denominator)
     }
@@ -25,6 +30,7 @@ public struct Rational: Sendable, Equatable, CustomStringConvertible {
         return Double(numerator) / Double(denominator)
     }
 
+    /// A `numerator/denominator` string representation.
     public var description: String {
         "\(numerator)/\(denominator)"
     }

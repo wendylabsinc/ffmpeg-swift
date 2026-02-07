@@ -6,6 +6,7 @@ public final class FilterGraph: @unchecked Sendable {
     private var bufferSrcCtx: UnsafeMutablePointer<AVFilterContext>?
     private var bufferSinkCtx: UnsafeMutablePointer<AVFilterContext>?
 
+    /// Creates a new empty filter graph.
     public init() throws {
         guard let graph = avfilter_graph_alloc() else {
             throw FFmpegError.noMemory

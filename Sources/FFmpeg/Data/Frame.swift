@@ -5,6 +5,7 @@ import CFFmpegShim
 /// Owns the underlying frame and frees it on `deinit`.
 /// Use `borrowing` access to pass frames to FFmpeg functions without transferring ownership.
 public struct Frame: ~Copyable {
+    /// The underlying `AVFrame` pointer.
     public var pointer: UnsafeMutablePointer<AVFrame>
 
     /// Allocates a new empty `AVFrame`.
@@ -27,51 +28,61 @@ public struct Frame: ~Copyable {
 
     // MARK: - Properties
 
+    /// Video width in pixels.
     public var width: Int32 {
         get { pointer.pointee.width }
         set { pointer.pointee.width = newValue }
     }
 
+    /// Video height in pixels.
     public var height: Int32 {
         get { pointer.pointee.height }
         set { pointer.pointee.height = newValue }
     }
 
+    /// Pixel format for video.
     public var pixelFormat: AVPixelFormat {
         get { AVPixelFormat(rawValue: pointer.pointee.format) }
         set { pointer.pointee.format = newValue.rawValue }
     }
 
+    /// Sample format for audio.
     public var sampleFormat: AVSampleFormat {
         get { AVSampleFormat(rawValue: pointer.pointee.format) }
         set { pointer.pointee.format = newValue.rawValue }
     }
 
+    /// Audio sample rate in Hz.
     public var sampleRate: Int32 {
         get { pointer.pointee.sample_rate }
         set { pointer.pointee.sample_rate = newValue }
     }
 
+    /// Number of audio samples per channel.
     public var numberOfSamples: Int32 {
         get { pointer.pointee.nb_samples }
         set { pointer.pointee.nb_samples = newValue }
     }
 
+    /// Presentation timestamp.
     public var pts: Int64 {
         get { pointer.pointee.pts }
         set { pointer.pointee.pts = newValue }
     }
 
+    /// Frame duration in time base units.
     public var duration: Int64 {
         get { pointer.pointee.duration }
         set { pointer.pointee.duration = newValue }
     }
 
+    /// Time base associated with `pts`/`duration`.
     public var timeBase: Rational {
         get { Rational(pointer.pointee.time_base) }
         set { pointer.pointee.time_base = newValue.avRational }
     }
 
+    /// Whether this frame is a key frame.
     public var isKeyFrame: Bool {
         (pointer.pointee.flags & AV_FRAME_FLAG_KEY) != 0
     }

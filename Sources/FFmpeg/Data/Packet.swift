@@ -4,6 +4,7 @@ import CFFmpegShim
 ///
 /// Owns the underlying packet and frees it on `deinit`.
 public struct Packet: ~Copyable {
+    /// The underlying `AVPacket` pointer.
     public var pointer: UnsafeMutablePointer<AVPacket>
 
     /// Allocates a new empty `AVPacket`.
@@ -26,39 +27,47 @@ public struct Packet: ~Copyable {
 
     // MARK: - Properties
 
+    /// Stream index this packet belongs to.
     public var streamIndex: Int32 {
         get { pointer.pointee.stream_index }
         set { pointer.pointee.stream_index = newValue }
     }
 
+    /// Presentation timestamp.
     public var pts: Int64 {
         get { pointer.pointee.pts }
         set { pointer.pointee.pts = newValue }
     }
 
+    /// Decode timestamp.
     public var dts: Int64 {
         get { pointer.pointee.dts }
         set { pointer.pointee.dts = newValue }
     }
 
+    /// Packet duration in time base units.
     public var duration: Int64 {
         get { pointer.pointee.duration }
         set { pointer.pointee.duration = newValue }
     }
 
+    /// Packet size in bytes.
     public var size: Int32 {
         pointer.pointee.size
     }
 
+    /// Raw packet data pointer, if any.
     public var data: UnsafeMutablePointer<UInt8>? {
         pointer.pointee.data
     }
 
+    /// Packet flags bitfield.
     public var flags: Int32 {
         get { pointer.pointee.flags }
         set { pointer.pointee.flags = newValue }
     }
 
+    /// Whether this packet is a key frame.
     public var isKeyFrame: Bool {
         (flags & cffmpeg_AV_PKT_FLAG_KEY) != 0
     }
