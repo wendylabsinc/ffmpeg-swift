@@ -12,8 +12,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Swift 6.2
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.2"
+
       - name: Swift version
         run: swift --version
+
+      - name: Verify Swift 6.2+
+        run: |
+          VERSION_LINE="$(swift --version | head -n1)"
+          VERSION_NUM="$(echo "$VERSION_LINE" | sed -E 's/.*version ([0-9]+)\\.([0-9]+).*/\\1 \\2/')"
+          MAJOR="$(echo "$VERSION_NUM" | awk '{print $1}')"
+          MINOR="$(echo "$VERSION_NUM" | awk '{print $2}')"
+          if [ -z "$MAJOR" ] || [ -z "$MINOR" ]; then
+            echo "Unable to parse Swift version from: $VERSION_LINE"
+            exit 1
+          fi
+          if [ "$MAJOR" -lt 6 ] || { [ "$MAJOR" -eq 6 ] && [ "$MINOR" -lt 2 ]; }; then
+            echo "Swift 6.2+ required. Found: $VERSION_LINE"
+            exit 1
+          fi
 
       - name: Build
         run: swift build
