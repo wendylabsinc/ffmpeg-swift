@@ -3,7 +3,7 @@
 # build-ffmpeg.sh — Build FFmpeg static libraries and assemble an SE-0482 artifact bundle.
 #
 # Usage:
-#   ./Scripts/build-ffmpeg.sh [--version 7.1] [--platforms macos-arm64,macos-x86_64,linux-x86_64,linux-aarch64] [--zip]
+#   ./Scripts/build-ffmpeg.sh [--version 7.1] [--platforms macos-arm64,macos-x86_64,linux-x86_64,linux-aarch64,android-arm64] [--zip]
 #
 # The script will:
 #   1. Download FFmpeg source (if not cached)
@@ -257,6 +257,77 @@ DOCKERFILE
     docker rm "$container_id"
 }
 
+build_android_arm64() {
+    local platform_tag="android-arm64"
+    local src_dir="$BUILD_DIR/ffmpeg-${FFMPEG_VERSION}"
+    local build_prefix="$BUILD_DIR/install-${platform_tag}"
+    local build_work="$BUILD_DIR/build-${platform_tag}"
+
+    if [[ -d "$build_prefix/lib" ]]; then
+        echo "==> $platform_tag already built, skipping"
+        return
+    fi
+
+    if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
+        if [[ -n "${ANDROID_SDK_ROOT:-}" && -d "${ANDROID_SDK_ROOT}/ndk" ]]; then
+            ANDROID_NDK_HOME="$(ls -d "${ANDROID_SDK_ROOT}"/ndk/* | sort -V | tail -n1)"
+        else
+            echo "ANDROID_NDK_HOME not set. Please set it to your NDK path."
+            exit 1
+        fi
+    fi
+
+    local host_os="$(uname -s)"
+    local host_arch="$(uname -m)"
+    local prebuilt="linux-x86_64"
+    if [[ "$host_os" == "Darwin" ]]; then
+        if [[ "$host_arch" == "arm64" ]]; then
+            prebuilt="darwin-arm64"
+        else
+            prebuilt="darwin-x86_64"
+        fi
+    fi
+
+    local toolchain="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/${prebuilt}"
+    if [[ ! -d "$toolchain" ]]; then
+        echo "NDK toolchain not found: $toolchain"
+        exit 1
+    fi
+
+    local api_level="${ANDROID_API_LEVEL:-21}"
+    local sysroot="${toolchain}/sysroot"
+    local cc="${toolchain}/bin/aarch64-linux-android${api_level}-clang"
+    local cxx="${toolchain}/bin/aarch64-linux-android${api_level}-clang++"
+    local ar="${toolchain}/bin/llvm-ar"
+    local ranlib="${toolchain}/bin/llvm-ranlib"
+    local strip="${toolchain}/bin/llvm-strip"
+
+    echo "==> Building FFmpeg for $platform_tag ..."
+    mkdir -p "$build_work"
+
+    cd "$build_work"
+    PATH="${toolchain}/bin:${PATH}" \
+    "$src_dir/configure" \
+        --prefix="$build_prefix" \
+        --arch=aarch64 \
+        --target-os=android \
+        --enable-cross-compile \
+        --cc="$cc" \
+        --cxx="$cxx" \
+        --ar="$ar" \
+        --ranlib="$ranlib" \
+        --strip="$strip" \
+        --sysroot="$sysroot" \
+        --extra-cflags="--sysroot=${sysroot} -fPIC" \
+        --extra-ldflags="--sysroot=${sysroot}" \
+        $(common_configure_flags) \
+        --enable-neon
+
+    make -j"$(nproc)"
+    make install
+    cd "$ROOT_DIR"
+}
+
 merge_static_libs() {
     local platform_tag="$1"
     local build_prefix="$BUILD_DIR/install-${platform_tag}"
@@ -412,6 +483,7 @@ generate_info_json() {
             macos-x86_64)   triple="x86_64-apple-macosx" ;;
             linux-x86_64)   triple="x86_64-unknown-linux-gnu" ;;
             linux-aarch64)  triple="aarch64-unknown-linux-gnu" ;;
+            android-arm64)  triple="aarch64-unknown-linux-android" ;;
         esac
 
         if ! $first; then
@@ -476,6 +548,9 @@ for platform_tag in "${PLATFORM_ARRAY[@]}"; do
             else
                 build_linux_docker aarch64
             fi
+            ;;
+        android-arm64)
+            build_android_arm64
             ;;
         *)
             echo "Unknown platform: $platform_tag"

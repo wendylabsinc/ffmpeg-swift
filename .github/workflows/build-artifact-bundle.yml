@@ -462,6 +462,167 @@ jobs:
           path: output/linux-aarch64
 
   # ===========================================================================
+  # Android arm64 (aarch64)
+  # ===========================================================================
+  build-android-arm64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential yasm nasm pkg-config curl xz-utils unzip
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager --install "ndk;26.3.11579264"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/26.3.11579264" >> $GITHUB_ENV
+
+      - name: Download FFmpeg source
+        run: |
+          curl -L "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" -o ffmpeg.tar.xz
+          tar xf ffmpeg.tar.xz
+
+      - name: Build FFmpeg
+        run: |
+          NDK="${ANDROID_NDK_HOME}"
+          TOOLCHAIN="${NDK}/toolchains/llvm/prebuilt/linux-x86_64"
+          API_LEVEL=21
+          SYSROOT="${TOOLCHAIN}/sysroot"
+
+          export PATH="${TOOLCHAIN}/bin:${PATH}"
+          export CC="${TOOLCHAIN}/bin/aarch64-linux-android${API_LEVEL}-clang"
+          export CXX="${TOOLCHAIN}/bin/aarch64-linux-android${API_LEVEL}-clang++"
+          export AR="${TOOLCHAIN}/bin/llvm-ar"
+          export RANLIB="${TOOLCHAIN}/bin/llvm-ranlib"
+          export STRIP="${TOOLCHAIN}/bin/llvm-strip"
+
+          mkdir -p build && cd build
+          ../ffmpeg-${FFMPEG_VERSION}/configure \
+            --prefix="$(pwd)/../install" \
+            --arch=aarch64 \
+            --target-os=android \
+            --enable-cross-compile \
+            --cc="${CC}" \
+            --cxx="${CXX}" \
+            --ar="${AR}" \
+            --ranlib="${RANLIB}" \
+            --strip="${STRIP}" \
+            --sysroot="${SYSROOT}" \
+            --extra-cflags="--sysroot=${SYSROOT} -fPIC" \
+            --extra-ldflags="--sysroot=${SYSROOT}" \
+            --enable-static \
+            --disable-shared \
+            --enable-pic \
+            --disable-programs \
+            --disable-doc \
+            --disable-autodetect \
+            --disable-debug \
+            --enable-gpl \
+            --enable-version3 \
+            --disable-network \
+            --disable-iconv \
+            --disable-xlib \
+            --disable-libxcb \
+            --disable-sdl2 \
+            --disable-vulkan \
+            --disable-vaapi \
+            --disable-vdpau \
+            --disable-d3d11va \
+            --disable-dxva2 \
+            --disable-cuda \
+            --disable-cuvid \
+            --disable-nvenc \
+            --disable-nvdec \
+            --enable-neon
+
+          make -j"$(nproc)"
+          make install
+
+      - name: Merge static libraries
+        run: |
+          mkdir -p output/android-arm64
+          MRI_SCRIPT="merge.mri"
+          echo "CREATE output/android-arm64/libcffmpeg.a" > $MRI_SCRIPT
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -f "install/lib/${lib}.a" ]; then
+              echo "ADDLIB install/lib/${lib}.a" >> $MRI_SCRIPT
+            fi
+          done
+          echo "SAVE" >> $MRI_SCRIPT
+          echo "END" >> $MRI_SCRIPT
+          ar -M < $MRI_SCRIPT
+
+      - name: Copy headers
+        run: |
+          mkdir -p output/android-arm64/include
+          for lib in libavutil libavcodec libavformat libavfilter libswscale libswresample libpostproc; do
+            if [ -d "install/include/${lib}" ]; then
+              cp -R "install/include/${lib}" "output/android-arm64/include/"
+            fi
+          done
+
+      - name: Generate module.modulemap
+        run: |
+          cat > output/android-arm64/include/module.modulemap << 'MODULEMAP'
+          module CFFmpeg {
+              header "libavutil/avutil.h"
+              header "libavutil/opt.h"
+              header "libavutil/dict.h"
+              header "libavutil/log.h"
+              header "libavutil/error.h"
+              header "libavutil/mem.h"
+              header "libavutil/pixfmt.h"
+              header "libavutil/pixdesc.h"
+              header "libavutil/samplefmt.h"
+              header "libavutil/channel_layout.h"
+              header "libavutil/frame.h"
+              header "libavutil/rational.h"
+              header "libavutil/imgutils.h"
+              header "libavutil/mathematics.h"
+              header "libavutil/timestamp.h"
+              header "libavutil/avstring.h"
+              header "libavutil/buffer.h"
+              header "libavutil/common.h"
+              header "libavutil/hwcontext.h"
+
+              header "libavcodec/avcodec.h"
+              header "libavcodec/codec.h"
+              header "libavcodec/codec_id.h"
+              header "libavcodec/codec_par.h"
+              header "libavcodec/packet.h"
+
+              header "libavformat/avformat.h"
+              header "libavformat/avio.h"
+
+              header "libavfilter/avfilter.h"
+              header "libavfilter/buffersink.h"
+              header "libavfilter/buffersrc.h"
+
+              header "libswscale/swscale.h"
+              header "libswresample/swresample.h"
+
+              link "z"
+              link "bz2"
+              link "m"
+              link "pthread"
+
+              export *
+          }
+          MODULEMAP
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-android-arm64
+          path: output/android-arm64
+
+  # ===========================================================================
   # Windows x86_64
   # ===========================================================================
   build-windows-x86_64:
@@ -769,6 +930,7 @@ jobs:
       - build-apple
       - build-linux-x86_64
       - build-linux-aarch64
+      - build-android-arm64
       - build-windows-x86_64
       - build-windows-arm64
     runs-on: macos-15
@@ -811,6 +973,7 @@ jobs:
               "watchos-arm64":   "arm64-apple-watchos",
               "linux-x86_64":    "x86_64-unknown-linux-gnu",
               "linux-aarch64":   "aarch64-unknown-linux-gnu",
+              "android-arm64":   "aarch64-unknown-linux-android",
               "windows-x86_64":  "x86_64-unknown-windows-msvc",
               "windows-arm64":   "aarch64-unknown-windows-msvc",
           }

@@ -8,7 +8,7 @@
 [![Windows](https://img.shields.io/github/actions/workflow/status/wendylabsinc/ffmpeg-swift/ci.yml?branch=main&label=Windows)](https://github.com/wendylabsinc/ffmpeg-swift/actions/workflows/ci.yml)
 [![Documentation](https://img.shields.io/badge/Documentation-DocC-blue)](https://swiftpackageindex.com/wendylabsinc/ffmpeg-swift/documentation)
 
-A type-safe, memory-safe Swift package that distributes FFmpeg 7.1 as pre-built static libraries via [SE-0482 artifact bundles](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0482-swiftpm-binary-target-static-lib.md). Any Swift project can `import FFmpeg` and use FFmpeg on macOS and Linux without installing FFmpeg system-wide.
+A type-safe, memory-safe Swift package that distributes FFmpeg 7.1 as pre-built static libraries via [SE-0482 artifact bundles](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0482-swiftpm-binary-target-static-lib.md). Any Swift project can `import FFmpeg` and use FFmpeg on Apple platforms, Linux, Windows, and Android without installing FFmpeg system-wide.
 
 ## Platform Support
 
@@ -21,6 +21,7 @@ A type-safe, memory-safe Swift package that distributes FFmpeg 7.1 as pre-built 
 | watchOS | arm64 | Supported |
 | Linux | x86_64 | Supported |
 | Linux | aarch64 | Supported |
+| Android | arm64 | Supported |
 | Windows | x86_64 | Supported |
 | Windows | arm64 | Supported |
 
@@ -117,6 +118,10 @@ while try fmt.readFrame(into: &packet) {
     }
 }
 ```
+
+## Examples
+
+See `Examples/README.md` for more usage patterns (decoding, scaling, filtering, and encoding).
 
 ### Video Scaling
 
