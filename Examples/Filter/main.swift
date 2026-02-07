@@ -20,11 +20,18 @@ do {
 
     print("Input: \(inputPath)")
 
+    if reader.videoStreamIndex < 0 {
+        fputs("No video stream found.\n", stderr)
+        exit(1)
+    }
+
+    let streamTimeBase = reader.formatContext.stream(at: Int(reader.videoStreamIndex)).timeBase
+
     var configured = false
     var count = 0
 
     for try await owned in reader.videoFrames() {
-        var frame = owned.takeFrame()
+        let frame = owned.takeFrame()
 
         if !configured {
             try graph.configureVideo(
@@ -32,7 +39,7 @@ do {
                 width: frame.width,
                 height: frame.height,
                 pixelFormat: frame.pixelFormat,
-                timeBase: frame.timeBase
+                timeBase: streamTimeBase
             )
             configured = true
         }

@@ -1,4 +1,4 @@
-import CFFmpegShim
+@preconcurrency import CFFmpegShim
 
 /// High-level media type used throughout the Swift API.
 public struct MediaType: RawRepresentable, Sendable, Hashable, CustomStringConvertible {
@@ -27,15 +27,15 @@ public struct MediaType: RawRepresentable, Sendable, Hashable, CustomStringConve
     }
 
     internal var avValue: AVMediaType {
-        AVMediaType(rawValue: rawValue) ?? AVMEDIA_TYPE_UNKNOWN
+        AVMediaType(rawValue: rawValue)
     }
 }
 
 /// High-level codec identifier used throughout the Swift API.
 public struct CodecID: RawRepresentable, Sendable, Hashable, CustomStringConvertible {
-    public let rawValue: Int32
+    public let rawValue: UInt32
 
-    public init(rawValue: Int32) {
+    public init(rawValue: UInt32) {
         self.rawValue = rawValue
     }
 
@@ -46,12 +46,14 @@ public struct CodecID: RawRepresentable, Sendable, Hashable, CustomStringConvert
     public static let mp3 = CodecID(rawValue: AV_CODEC_ID_MP3.rawValue)
 
     public var description: String {
-        let name = avcodec_get_name(avValue)
+        guard let name = avcodec_get_name(avValue) else {
+            return "unknown(\(rawValue))"
+        }
         return String(cString: name)
     }
 
     internal var avValue: AVCodecID {
-        AVCodecID(rawValue: rawValue) ?? AV_CODEC_ID_NONE
+        AVCodecID(rawValue: rawValue)
     }
 }
 
@@ -78,7 +80,7 @@ public struct PixelFormat: RawRepresentable, Sendable, Hashable, CustomStringCon
     }
 
     internal var avValue: AVPixelFormat {
-        AVPixelFormat(rawValue: rawValue) ?? AV_PIX_FMT_NONE
+        AVPixelFormat(rawValue: rawValue)
     }
 }
 
@@ -104,12 +106,12 @@ public struct SampleFormat: RawRepresentable, Sendable, Hashable, CustomStringCo
     }
 
     internal var avValue: AVSampleFormat {
-        AVSampleFormat(rawValue: rawValue) ?? AV_SAMPLE_FMT_NONE
+        AVSampleFormat(rawValue: rawValue)
     }
 }
 
 /// High-level audio channel layout used throughout the Swift API.
-public struct ChannelLayout: Sendable, CustomStringConvertible {
+public struct ChannelLayout: @unchecked Sendable, CustomStringConvertible {
     internal var layout: AVChannelLayout
 
     /// Creates a default layout for the given channel count.
@@ -130,11 +132,13 @@ public struct ChannelLayout: Sendable, CustomStringConvertible {
     }
 
     public var description: String {
+        var layoutCopy = layout
         var buffer = [CChar](repeating: 0, count: 128)
-        buffer.withUnsafeMutableBufferPointer { buf in
-            _ = av_channel_layout_describe(&layout, buf.baseAddress, buf.count)
+        let string = buffer.withUnsafeMutableBufferPointer { buf -> String in
+            _ = av_channel_layout_describe(&layoutCopy, buf.baseAddress, buf.count)
+            return String(cString: buf.baseAddress!)
         }
-        return String(cString: buffer)
+        return string
     }
 
     internal init(_ layout: AVChannelLayout) {
@@ -147,7 +151,7 @@ public struct ChannelLayout: Sendable, CustomStringConvertible {
 }
 
 /// Opaque handle to an FFmpeg codec.
-public struct CodecRef: Sendable {
+public struct CodecRef: @unchecked Sendable {
     internal let pointer: UnsafePointer<AVCodec>
 
     internal init(_ pointer: UnsafePointer<AVCodec>) {
@@ -156,7 +160,7 @@ public struct CodecRef: Sendable {
 }
 
 /// Opaque handle to an FFmpeg stream.
-public struct StreamHandle: Sendable {
+public struct StreamHandle: @unchecked Sendable {
     internal let pointer: UnsafeMutablePointer<AVStream>
 
     internal init(_ pointer: UnsafeMutablePointer<AVStream>) {
